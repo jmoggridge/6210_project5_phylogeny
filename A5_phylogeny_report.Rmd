@@ -26,6 +26,7 @@ library(tidyverse)
 library(bold)
 library(Biostrings)
 library(DECIPHER)
+library(ape)
 library(beepr)
 library(rcartocolor)
 library(ggthemes)
@@ -56,7 +57,7 @@ As there is no way to ascertain the actual course of substitutions, we must appl
 
 Perhaps a holistic view considers various models as an ensemble.
 
-Polynoidae were selected as a convienent study subject having ample data on BOLD, with a non-trivial number of genera and species.
+Polynoidae were selected as a convenient study subject having ample data on BOLD, with a non-trivial number of genera and species.
 <!--
 Paragraph 3: What is the specific objective of your study? What kind of study are you performing? What will you d 
 -->
@@ -64,14 +65,112 @@ Paragraph 3: What is the specific objective of your study? What kind of study ar
 
 ### 2. Data
 
-barcode sequences were downloaded from BOLD on 2020-12-01.
+*Polynoidae* barcode sequences were downloaded from BOLD on 2020-12-10.
 
 
 ```{r eval=FALSE}
- # BOLD downlaod for taxon 'Polychaeta'
-polynoid.bold <- bold::bold_seqspec(taxon = 'Polynoidae')
-write_rds(polynoid.bold, 'polynoidea.bold.rds', compress = 'gz')
+## Download BOLD specimen+seq data for taxon 'Polynoidae'
+
+# polynoids <- bold::bold_seqspec(taxon = 'Polynoidae') 
+# polynoids <- polynoids %>%
+#   select(processid, contains('name'), contains('marker'), nucleotides) %>%
+#   select(-c(trace_names, phylum_name, class_name, marker_codes))
+# glimpse(polynoids)
+# write_rds(polynoids, 'polynoid.raw.rds', compress = 'gz')
 ```
 
 
+```{r tidy and filter}
+
+filter_trim_seqs <- function(bold.df, markers, minlen, maxlen, n_threshold){
+  
+  bold.df <- bold.df %>%
+    # replace blanks with na's and make strings factors, except for sequences
+    mutate(across(where(is.character), ~na_if(.x, ''))) %>%
+    mutate(across(where(is.character), as.factor)) %>%
+    mutate(nucleotides = as.character(nucleotides))  %>%
+    # Keep only specimens with desired marker gene sequences
+    filter(!is.na(nucleotides) & markercode %in% markers) %>%
+    # Remove gaps and outer N's
+    mutate(seq = str_remove_all(nucleotides, '\\s|-|^N+|N+$')) %>%
+    mutate(slen = nchar(seq)) %>%
+    # filter by length and Ns threshold
+    filter(slen > minlen & slen < maxlen & 
+             str_count(seq, 'N')/slen <= n_threshold)
+  return(bold.df)  
+}
+
+polynoids.raw <- read_rds('polynoid.raw.rds') %>%
+  filter(!is.na(species_name))
+# apply filtering steps
+polynoids.df <- filter_trim_seqs(polynoids.raw, 'COI-5P', 625, 675, 0.02)
+```
+
+
+There are `r nrow(polynoids.raw)` *Polynoidae* specimens in the BOLD database. Of these, only `r nrow(polynoids.df)` specimens with complete taxonomic information and cytochrome c oxidase I barcode sequences that were of appropriate length (600-700 bp) and with a low proportion of ambiguous bases (<2%).
+
+These are comprised of `r length(unique(polynoids.df$genus_name))` genera with`r length(unique(polynoids.df$species_name))`.
+
+```{r, fig.height=3, fig.width=4, fig.align='center'}
+a <- ggplot(polynoids.df, aes(x = slen)) +
+  geom_histogram() + 
+  xlab('Sequence length') +
+  geom_rangeframe() + 
+  theme_tufte()
+b <- polynoids.df %>%
+  mutate(`% GC` = str_count(seq, '[GC]')/slen*100) %>%
+  ggplot(aes(x=`% GC`)) + 
+  geom_histogram() +
+  geom_rangeframe() + 
+  theme_tufte()
+a/b
+rm(a,b)
+```
+
+
+
+```{r}
+set.seed(1)
+# Down-sample to 1 sequence per species
+polynoids.sample <- polynoids.df %>%
+  group_by(species_name) %>%
+  sample_n(1) %>%
+  data.frame() %>%
+  # create labels for the alignment
+  mutate(name = paste(word(species_name, 1)), row_number()) %>%
+  # tidy up empty factor levels
+  mutate(across(where(is.factor), fct_drop))
+```
+
+Sequences were reoriented where necessary and alignments were done with the package `DECIPHER` (cite).
+
+```{r}
+# Make 'seq' a DNA stringset
+polynoids.df$seq <-
+  Biostrings::DNAStringSet(polynoids.df$seq)
+# Attach labels with taxonomy + id
+names(polynoids.df$seq) <- polynoids.df$name
+# Reorient any sequences that might align better as rev-complement...
+polynoids.df$seq <- OrientNucleotides(polynoids.df$seq)
+# Perform alignment with decipher defaults
+polynoids.align <- DECIPHER::AlignSeqs(polynoids.df$seq, verbose = FALSE)
+# Transform decipher alignment into DNAbin object
+polynoids.bin <- as.DNAbin(polynoids.align)
+# rm(polynoids.align)
+```
+
+
+
+
+
+
+
+### Supplemental
+
+```{r}
+
+# translated alignment performs really poorly
+polychaeta.align2 <- DECIPHER::AlignTranslation(polychaeta.seqs$seq, verbose = TRUE)
+BrowseSeqs(polychaeta.align2)
+```
 
