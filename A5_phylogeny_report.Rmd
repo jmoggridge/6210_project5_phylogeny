@@ -1,0 +1,77 @@
+---
+title: "A5_phylogeny_report"
+author: "J Moggridge"
+date: "10/12/2020"
+output: pdf_document
+highlight: kate
+urlcolor: blue
+---
+
+This work is available on [github](https://github.com/jmoggridge/6210_project5_phylogeny)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  cache = TRUE,
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+options(tinytex.verbose = TRUE)
+```
+
+
+```{r}
+# Libraries
+library(tidyverse)
+library(bold)
+library(Biostrings)
+library(DECIPHER)
+library(beepr)
+library(rcartocolor)
+library(ggthemes)
+library(patchwork)
+```
+
+
+### 1. Introduction
+
+<!-- 
+Paragraph 1: What is the overarching topic you are interested in? Why is this scientifically important and interesting and/or societally relevant?o
+ -->
+Polychaeta are diverse group... many cryptic species..
+
+Metabarcoding is commonly used as a means for biodiversity analysis; these are used for ecological assessments and environmental monitoring.
+
+Climate change is a major threat to global biodiversity, however the effects upon the arctic region is been unparalleled.
+
+Phylogenetic analysis are important for understanding the diversity of species in a community.
+
+
+<!-- dkd
+Paragraph 2: You can outline what is an important sub-area of research or a gap in knowledge. (As an example, perhaps your broader theme is gene expression analysis, and in paragraph 2 you could narrow in to introduce the importance of statistical choices.)
+-->
+Model choice remains a topic of contention (Abad 2019i; Crandall; Posata and Crandall).
+
+As there is no way to ascertain the actual course of substitutions, we must apply biases (eg. parsimony, likelihood, information criteria) to even have a grounds upon which to evaluate different models...
+
+Perhaps a holistic view considers various models as an ensemble.
+
+Polynoidae were selected as a convienent study subject having ample data on BOLD, with a non-trivial number of genera and species.
+<!--
+Paragraph 3: What is the specific objective of your study? What kind of study are you performing? What will you d 
+-->
+
+
+### 2. Data
+
+barcode sequences were downloaded from BOLD on 2020-12-01.
+
+
+```{r eval=FALSE}
+ # BOLD downlaod for taxon 'Polychaeta'
+polynoid.bold <- bold::bold_seqspec(taxon = 'Polynoidae')
+write_rds(polynoid.bold, 'polynoidea.bold.rds', compress = 'gz')
+```
+
+
+
