@@ -25,9 +25,10 @@ options(tinytex.verbose = TRUE)
 library(tidyverse)
 library(bold)
 library(Biostrings)
-library(DECIPHER)
 library(ape)
-library(beepr)
+library(DECIPHER)
+library(dendextend)
+library(ggdendro)
 library(rcartocolor)
 library(ggthemes)
 library(patchwork)
@@ -39,38 +40,28 @@ library(patchwork)
 <!-- 
 Paragraph 1: What is the overarching topic you are interested in? Why is this scientifically important and interesting and/or societally relevant?o
  -->
-Polychaeta are diverse group... many cryptic species..
-
-Metabarcoding is commonly used as a means for biodiversity analysis; these are used for ecological assessments and environmental monitoring.
-
-Climate change is a major threat to global biodiversity, however the effects upon the arctic region is been unparalleled.
-
-Phylogenetic analysis are important for understanding the diversity of species in a community.
-
 
 <!-- dkd
 Paragraph 2: You can outline what is an important sub-area of research or a gap in knowledge. (As an example, perhaps your broader theme is gene expression analysis, and in paragraph 2 you could narrow in to introduce the importance of statistical choices.)
 -->
-Model choice remains a topic of contention (Abad 2019i; Crandall; Posata and Crandall).
+Phylogenetic analysis is common in biodiversity studies and environmental assessment. However, being a multi-step process and with various methods to choose from and parameters to set (eg. parsimony or distance-based, neighbor-joining or ultrametric), it can be far from clear how to proceed (in my experience). Not only are there many different phylogenetic markers to assess, but also many different types of alignment and clustering algorithms (neighbor-joining, UPGMA, single-linkage). In particular, there are a ton of different models of molecular evolution (ie. DNA substitution rates)
 
-As there is no way to ascertain the actual course of substitutions, we must apply biases (eg. parsimony, likelihood, information criteria) to even have a grounds upon which to evaluate different models...
+Molecular evolution is modeled as a Markov process (ie. memoryless) with parameters for the rates of substitution. For example, the naive model, Jukes-Cantor, treats all substitutions as equally likely; Kimura 2-parameter treats transitions and transversions differently, while more complex models may have each position in the alignment or branches within the tree parameterized independently. As there is no way to ascertain the actual substitution events and when they occurred, we must apply biases to evaluate and compare different competing models (eg. likelihood, information criteria) (Crandall; Posata and Crandall). The ideal criteria for distance model selection is generally unclear, though it also might not matter too much as we are not interested in the distances themselves, but the rather the phylogenetic inferences that we make based on them (Abadi 2019). 
 
-Perhaps a holistic view considers various models as an ensemble.
-
-Polynoidae were selected as a convenient study subject having ample data on BOLD, with a non-trivial number of genera and species.
+Polynoidae were selected as a convenient study subject, having adequate and easily accessible data on BOLD
 <!--
 Paragraph 3: What is the specific objective of your study? What kind of study are you performing? What will you d 
 -->
+In this work, I sought to explore the effect of model choice in phylogenetic analysis. Specifically, I wanted to find out whether different distance models would lead to altered inferences about phylogeny through hierarchical clustering. For this, I selected the family of scale worms Polynoidae, and analyzed their cytochrome c oxidase subunit I sequences. Polynoidae are a large and diverse family of scale worms that have colonized challenging habitats such as the deep sea, sea caves, and hydrothermal vents. Many are symbiotic species that live inside other organisms, even inside other polychaetes (Salazar-Vallejo)! Many new species have been found in surveys and determining their phylogenetic relationships to known species is of interest (Norlinder, 2012). 
+
 
 
 ### 2. Data
 
-*Polynoidae* barcode sequences were downloaded from BOLD on 2020-12-10.
-
+*Polynoidae* sequences data were downloaded from the public Barcode of Life Database (BOLD) api on 2020-12-10, using their `bold` package. There were 1847 specimen records for this taxon in the database in total. The data of interest, ie. containing the identifiers, sequences, and taxonomic names were saved as `polynoid.raw.rds`.
 
 ```{r eval=FALSE}
 ## Download BOLD specimen+seq data for taxon 'Polynoidae'
-
 # polynoids <- bold::bold_seqspec(taxon = 'Polynoidae') 
 # polynoids <- polynoids %>%
 #   select(processid, contains('name'), contains('marker'), nucleotides) %>%
@@ -79,98 +70,363 @@ Paragraph 3: What is the specific objective of your study? What kind of study ar
 # write_rds(polynoids, 'polynoid.raw.rds', compress = 'gz')
 ```
 
+### 3. Acquisition and selection of data
+
+<!-- 3. Code Section 1 – Data Acquisition, Exploration, Filtering, and Quality Control (25%) -->
 
 ```{r tidy and filter}
-
-filter_trim_seqs <- function(bold.df, markers, minlen, maxlen, n_threshold){
-  
+tidy_bold_data <- function(bold.df, markers){
+  # make blanks NA's; make strings factors, except for seqs
+  # remove any missing genus+species names
   bold.df <- bold.df %>%
-    # replace blanks with na's and make strings factors, except for sequences
     mutate(across(where(is.character), ~na_if(.x, ''))) %>%
-    mutate(across(where(is.character), as.factor)) %>%
+    mutate(across(where(is.character), as_factor)) %>%
     mutate(nucleotides = as.character(nucleotides))  %>%
-    # Keep only specimens with desired marker gene sequences
+    filter(!is.na(genus_name) & !is.na(species_name)) 
+  return(bold.df)
+}
+trim_and_filter <- function(bold.df, markers, minlen, maxlen, n_threshold){
+  bold.df <- bold.df %>%
+    # Keep only seqs of selected gene
     filter(!is.na(nucleotides) & markercode %in% markers) %>%
-    # Remove gaps and outer N's
-    mutate(seq = str_remove_all(nucleotides, '\\s|-|^N+|N+$')) %>%
-    mutate(slen = nchar(seq)) %>%
-    # filter by length and Ns threshold
+    # Remove gaps and outer N's from sequences
+    mutate(seq = str_remove_all(nucleotides, '\\s|-|^N+|N+$'),
+           slen = nchar(seq)) %>%
+    # filter by length and Ns proportion
     filter(slen > minlen & slen < maxlen & 
              str_count(seq, 'N')/slen <= n_threshold)
   return(bold.df)  
 }
 
-polynoids.raw <- read_rds('polynoid.raw.rds') %>%
-  filter(!is.na(species_name))
-# apply filtering steps
-polynoids.df <- filter_trim_seqs(polynoids.raw, 'COI-5P', 625, 675, 0.02)
-```
+# read in data & apply filtering steps
+polynoids.raw <- read_rds('polynoid.raw.rds')
 
-
-There are `r nrow(polynoids.raw)` *Polynoidae* specimens in the BOLD database. Of these, only `r nrow(polynoids.df)` specimens with complete taxonomic information and cytochrome c oxidase I barcode sequences that were of appropriate length (600-700 bp) and with a low proportion of ambiguous bases (<2%).
-
-These are comprised of `r length(unique(polynoids.df$genus_name))` genera with`r length(unique(polynoids.df$species_name))`.
-
-```{r, fig.height=3, fig.width=4, fig.align='center'}
-a <- ggplot(polynoids.df, aes(x = slen)) +
-  geom_histogram() + 
-  xlab('Sequence length') +
-  geom_rangeframe() + 
-  theme_tufte()
-b <- polynoids.df %>%
-  mutate(`% GC` = str_count(seq, '[GC]')/slen*100) %>%
-  ggplot(aes(x=`% GC`)) + 
-  geom_histogram() +
-  geom_rangeframe() + 
-  theme_tufte()
-a/b
-rm(a,b)
-```
+polynoids.df <- polynoids.raw %>%
+  tidy_bold_data() %>%
+  trim_and_filter(markers = 'COI-5P', minlen = 630,
+                  maxlen = 680, n_threshold =  0.02)
 
 
 
-```{r}
-set.seed(1)
 # Down-sample to 1 sequence per species
+set.seed(1)
 polynoids.sample <- polynoids.df %>%
   group_by(species_name) %>%
   sample_n(1) %>%
   data.frame() %>%
-  # create labels for the alignment
-  mutate(name = paste(word(species_name, 1)), row_number()) %>%
-  # tidy up empty factor levels
-  mutate(across(where(is.factor), fct_drop))
+  mutate(across(where(is.factor), fct_drop)) # drop empty factor levels
+
 ```
 
-Sequences were reoriented where necessary and alignments were done with the package `DECIPHER` (cite).
+
+Of the data, only `r nrow(polynoids.df)` *Polynoidae* specimens had complete taxonomic information and cytochrome c oxidase I barcode sequences that were of appropriate length (625- bp) and a low proportion of ambiguous base calls (<2%). The filtered dataset is comprised of `r length(unique(polynoids.df$genus_name))` genera, with `r length(unique(polynoids.df$species_name))`  species in total. For analysis, a single representative was chosen at random for each species.
+
+
+```{r EDA, fig.height=4, fig.width=6, fig.align='center'}
+EDA_plot <- function(bold.df, label) {
+  a <- ggplot(bold.df, aes(x = slen)) +
+    labs(x = 'Sequence length', subtitle = label) +
+    geom_histogram() + geom_rangeframe() + theme_tufte()
+  b <- bold.df %>%
+    mutate(`% GC` = str_count(seq, '[GC]')/slen*100) %>%
+    ggplot(aes(x=`% GC`)) + 
+    geom_histogram() + geom_rangeframe() + theme_tufte()
+  c <- bold.df %>%
+    group_by(genus_name) %>%
+    summarize(species = length(unique(species_name))) %>%
+    ggplot(aes(x=species)) + 
+    xlab('Species per genus') +
+    geom_histogram() + geom_rangeframe() +theme_tufte()
+  return(a/b/c)
+}
+
+A <- EDA_plot(polynoids.df, 'Filtered data') 
+B <- EDA_plot(polynoids.sample, 'Sampled data')
+A|B
+rm(polynoids.raw, polynoids.df, A, B)
+```
+
+
+Most of the sequences are approximately 660 bp in length and have GC-content between 35-45%. I chose a single sequence at random as a representative for each of the 95  species. 
+
+### 4. Tools for phylogenetic analysis
+
+Sequences were reoriented as necessary and alignments were done with the package `DECIPHER` (cite). Alignments in `DECIPHER` are fast and accurate; many other choices are available, including the popular `muscle` and `clustal` algorithms. I chose to use the `DECIPHER` package for 
+
+Hierarchical clustering was also performed using the implementations of various algorithms in the `DECIPHER` package.
+
+For visualizations, I used the `ggplot2` and `dendextend` libraries to create dendrograms and tanglegrams. The `dendextend` tutorial was quite helpful for modification of dendrograms
+
+<!-- Silhouette plots were created with... rpartplot -->
+<!-- 4. Main Software Tools Description (1 paragraph) (5%) -->
+<!-- 
+Provide a short written description (1 paragraph) about the main software tool you will be using to answer your main question. 
+Why did you make this choice? What are the expected strengths and weaknesses of the tool you chose? Did you consider any alternatives? Cite the authors of the tool you used (you can cite the package itself plus the relevant associated publication, if available). If you are conducting a methodological project involving a comparison of tools, you might briefly describe two main tools in this section. Otherwise, you will typically describe one main software tool. -->
+<!-- Also, in this section, make it clear how you built upon existing vignettes for conducting your project. -->
+
+### 5. Phylogenetic Analysis
+
+
+<!-- Code Section 2 – Main Analysis (25%) -->
+<!-- You would then move on to performing your main analysis. What would go in this section would depend upon your project, e.g.: writing code to build and test a classifier, build visualizations to explore ideas, conduct a statistical test of a biological hypothesis, or explore the impact of methodological choices upon results. -->
+<!-- Your main analysis section must also include a minimum of 2 figures and a maximum of 3 figures. The grade is based upon quality, not number of figures. Please note that extra figures will not be graded. -->
+<!-- Guidelines: Please see the guidelines for code section #1 above. The same general messages apply, including to focus upon quality, not length, and to comment your code well, etc. -->
+
+```{r align and cluster}
+do_alignment <- function(sample.df, names_vector, browse=FALSE, verbose = FALSE){
+  # Sequences are formatted and labeled, then any reverse complements we reoriented prior to alignment with default parameters
+  seqs <- Biostrings::DNAStringSet(sample.df$seq)
+  names(seqs) <- names_vector
+  seqs <-  DECIPHER::OrientNucleotides(seqs, verbose = verbose)
+  seqs.aligned <- DECIPHER::AlignSeqs(seqs, verbose = verbose)
+  if (browse==TRUE){
+    BrowseSeqs(seqs.aligned)
+    }
+  return(seqs.aligned)
+}
+do_clustering <- function(dnabin, model, threshold, algo){
+  # performs h.clustering w chosen model, algorithm, & threshold
+  DECIPHER::IdClusters(
+    dist.dna(x = dnabin, model = model,
+             as.matrix = FALSE, pairwise.deletion = TRUE),
+    method = algo, cutoff = threshold, verbose = FALSE,
+    showPlot = FALSE, type = "both")
+} 
+
+# perform alignment and hierarchical clusterings
+polynoids.align <- do_alignment(polynoids.sample,
+                                polynoids.sample$genus_name)
+polynoids.bin <- as.DNAbin(polynoids.align)
+
+# Clustering by three models JC (raw), K2P (k80), and TN93
+models <- c('raw', 'k80', 'tn93')
+clusters <- lapply(models, 
+                   function(x) do_clustering(polynoids.bin, x, 0.2, 'NJ'))
+names(clusters) <- models
+dendros <- lapply(clusters, '[[', 2)
+names(dendros) <- models
+
+## Maximum-likelihood hierarchical clustering
+clusters.ML <- DECIPHER::IdClusters(
+  myXStringSet = polynoids.align,
+  myDistMatrix = DistanceMatrix(polynoids.align, type='dist'),
+  method = 'ML', 
+  cutoff = 0.2, showPlot = FALSE,
+  type = "both", verbose = TRUE) 
+
+rm(polynoids.align)
+```
+
+
+
+I performed hierarchical clustering with various models (JC, K80, TN93)
+I also did a maximum-likelihood clustering of the sequences to compare with the default settings. 
+
+### 6. Results and Figures
+
+
+<!-- 6. Quality of Visualizations (20%) -->
+<!-- Throughout, ensure that your figures are clear and well labeled. Even for simple figures, such as histograms, ensure that you have accurate, informative axis labels. Also, consider readability, visual appeal, and accessibility. Use well-differentiated colours, and avoid relying upon the red-green spectrum to convey scientifically important information. Remember, you can consider using a combination of colour and symbol/pattern to convey your meaning. The grade in this section is based upon quality and novelty, not having the maximum permissible number of figures. You should have a total of 4-6 figures for your project (excluding the bonus section, should you choose to complete that section). -->
+
+```{r modify dendrograms, fig.height=6}
+fix_dendrogram <- function(dendro, template){
+  dendro <- dendro %>%
+    match_order_by_labels(., template) %>%
+    set('labels_cex', 0.6) %>%
+    set("branches_lwd", 0.5)
+  dendro <- as.ggdend(dendro)
+}
+dendrograms <- lapply(dendros, fix_dendrogram, dendros[[1]])
+lapply(dendrograms, ggplot, horiz=TRUE)
+```
+
+
+```{r tanglegrams, fig.align='center', fig.width=8, fig.height=9}
+
+make_tanglegram <- function(dend1, dend2){
+  # makes a tanglegram from 2 dendrograms
+  dend1 <- match_order_by_labels(dend1, dend2) # orient leaves similarly
+  dend.list <- dendlist(dend1, dend2) # make list
+  entangle.val <- entanglement(dend.list) # calculate entanglement
+  print(entangle.val)
+  # make tanglegram plot
+  dend.list %>% untangle() %>%
+    tanglegram(
+      common_subtrees_color_branches = TRUE,
+      highlight_distinct_edges = FALSE) %>%
+    set('labels_cex', 0.7) %>% set("branches_lwd", 1)
+}
+tangle_K80_JC <- make_tanglegram(clusters.k80[[2]], clusters.JC[[2]])
+tangle_TN93_JC <- make_tanglegram(clusters.tn93[[2]], clusters.JC[[2]])
+tangle_K80_TN93 <- make_tanglegram(clusters.tn93[[2]], clusters.k80[[2]])
+```
 
 ```{r}
-# Make 'seq' a DNA stringset
-polynoids.df$seq <-
-  Biostrings::DNAStringSet(polynoids.df$seq)
-# Attach labels with taxonomy + id
-names(polynoids.df$seq) <- polynoids.df$name
-# Reorient any sequences that might align better as rev-complement...
-polynoids.df$seq <- OrientNucleotides(polynoids.df$seq)
-# Perform alignment with decipher defaults
-polynoids.align <- DECIPHER::AlignSeqs(polynoids.df$seq, verbose = FALSE)
-# Transform decipher alignment into DNAbin object
-polynoids.bin <- as.DNAbin(polynoids.align)
-# rm(polynoids.align)
+x <- clusters.k80[[2]] %>% set('labels_cex', 0.7) %>% set("branches_lwd", 1)
+y <- clusters.JC[[2]] %>% set('labels_cex', 0.7) %>% set("branches_lwd", 1)
+dend_diff(x,y) 
 ```
+<!-- The topological distance is defined as twice the number of internal branches defining different bipartitions of the tips (Robinson and Foulds 1981; Penny and Hendy 1985). Rzhetsky and Nei (1992) proposed a modification of the original formula to take multifurcations into account. -->
+
+<!-- The branch length score may be seen as similar to the previous distance but taking branch lengths into account. Kuhner and Felsenstein (1994) proposed to calculate the square root of the sum of the squared differences of the (internal) branch lengths defining similar bipartitions (or splits) in both trees. -->
+<!-- Two methods are available: the one by Penny and Hendy (1985, originally from Robinson and Foulds 1981), and the branch length score by Kuhner and Felsenstein (1994). The trees are always considered as unrooted. -->
 
 
-
-
-
+```{r}
+library(phytools)
+class(dendros[[1]])
+names(dendros)
+phylos <- lapply(dendros, as.phylo)
+phylos <- phytools::as.multiPhylo(phylos[[1]], phylos[[2]], phylos[[3]])
+class(phylos[[1]])
+ape::dist.topo(phylos[[1]], phylos[[2]])
+ape::dist.topo(phylos[[1]], phylos[[3]])
+ape::dist.topo(phylos[[2]], phylos[[3]])
+```
 
 
 ### Supplemental
 
-```{r}
 
-# translated alignment performs really poorly
-polychaeta.align2 <- DECIPHER::AlignTranslation(polychaeta.seqs$seq, verbose = TRUE)
-BrowseSeqs(polychaeta.align2)
+
+### 7. Supplementary 
+
+<!-- Bonus Section (Optional) (5%) -->
+<!-- This section can contain whatever you want! This is your chance to do something of interest to you, which is related to your overall topic, but which didn’t fit into the mandatory sections. -->
+<!-- An example of a topic that could go here would be benchmarking your analysis for computational speed and/or for accuracy (against comparator tools). Or, you could include supplementary statistical testing (e.g. testing whether your results are sensitive to your analytical choices in your main analysis section). You could also include supplementary visualizations of your choosing. -->
+<!-- The maximum length of this section is 2 pages of your final PDF assignment. Any content above the two-page limit for this section will not be graded. This could consist of prose, commented code, statistical results, and/or visualizations (your choice). -->
+<!-- Tip: Please note that the credit weighting associated with this section is small. So, I suggest ensuring that you have completed a high-quality project for all of the other sections before preparing anything for this section. -->
+<!-- Note: The presence of this section means that a grade for Assignment #5 could hypothetically go above 100% (to a maximum of 105%). However, overall course grades are capped at 100% maximum. -->
+
+
+
+```{r}
+distVector <- function(model, dnabin){
+  # return numeric vector of the upper triangle of the distance matrix
+  dist <- dist.dna(x = dnabin,
+                   model = model,
+                   as.matrix = FALSE,
+                   pairwise.deletion = TRUE)
+  return(as.numeric(dist))
+}
+
+# Molecular evolution analysis ----
+# create a df with all the distance measures as columns
+dist.df <- tibble(model = c('raw','N', 'k80', 'tn93', 'gg95', 'TS', 'TV')) %>%
+  mutate(data = lapply(model, function(x) distVector(x, polynoids.bin))) %>%
+  pivot_wider(names_from = 'model', values_from = 'data') %>%
+  unnest(cols = raw:TV)
+
+glimpse(dist.df)
+
+
+# plot p-distance ~ k80 distance
+raw_k80.plot <- dist.df %>%
+  ggplot(aes(x=k80, y=raw)) + 
+  geom_point(alpha = 0.5, size = 0.5, pch = 1) +
+  # add diagonal line
+  geom_path(
+    data = data.frame(
+      x = seq(0, 1, 0.05),
+      y = seq(0, 1, 0.05),
+      group = factor('group')
+    ),
+    aes(x = x, y = y, group = group),
+    alpha = 0.7,
+    lty = 2
+  ) +
+  theme_classic() +
+  xlim(c(0, 0.72)) +
+  ylim(c(0, 0.45)) +
+  labs(x = 'K2P distance', y = 'p-distance',
+       title = 'Saturation plot: distances of Polychaete CO1 sequences',
+       subtitle = 'p-distance underestimates greater distances',
+       caption = paste0('data from BOLD. (', nrow(polynoids.bin),
+                        '), 2020/10/31'))
+raw_k80.plot
+
+# plot transitions and transversions ~ k80 distance
+ts_tv.plot <- dist.df %>%
+  select(k80, TS, TV) %>%
+  # manipulate table into long-form
+  pivot_longer(cols=c(TS, TV),
+               names_to = 'Substitution', values_to = 'Proportion') %>%
+  # create scatterplot w smooth fits
+  ggplot(aes(x = k80, y = Proportion, color = Substitution, group = Substitution)) +
+  geom_point(size=0.04, alpha = 0.3) +
+  geom_smooth(method = 'loess', formula = 'y~x', se=FALSE) +
+  theme_classic() +
+  scale_color_carto_d('Type') +
+  guides(
+    colour = guide_legend(override.aes = list(size=5, alpha=1, pch=15))
+    ) +
+  labs(
+    x = 'K2P distance',
+    y = 'Substiutions',
+    title = '',
+    subtitle = 'Transitions and transverions by K2P distance in Polynoidae COI sequences',
+    caption = paste0('Data from BOLD; accessed on 2020/10/31')
+    )
+# takes a long time to plot
+ts_tv.plot
+
+
+## do same plot with other distances (JC, )
+
+rm(raw_k80.plot, ts_tv.plot, dist.df)
+
+
 ```
 
+I attempted to align translated sequences, however the results were not impressive. The alignment has several sequences that did not align at all. I suspect that the algorithm could not find the correct reading frame and that to do so would require manually setting the reading frame and trimming sequences to begin at a codon; this did not seem feasible to do within the scope of the project. As such, left this out of the analysis.
+
+```{r eval = FALSE}
+# translated alignment performs really poorly
+align.translated <- DECIPHER::AlignTranslation(polynoids.sample$seq, verbose = FALSE)
+# BrowseSeqs(align.translated)
+```
+
+
+```{r}
+beep(2)
+```
+
+
+
+<!-- Result + Discussion section: -->
+<!-- 8 -->
+<!-- o Paragraph 1: Return to your original question. What is the answer to your question? What did you discover? Were your results as expected or not? -->
+<!-- o Paragraph 2: Briefly describe any key caveats of your study. For example, are the conclusions that can be drawn limited by sample size or any other concerns? Were there biases in data availability that could have impacted your project? -->
+<!-- o Paragraph 3: What would be the next steps for this research? What would you do next if you had more time and if you were going to develop this work into a larger project? Did your results reveal any interesting preliminary findings that would be worthy of follow-up study? -->
+<!-- Guidelines: Please see introduction for length guidelines for written paragraphs. -->
+<!-- Tip: I suggest that you consider citing 2-4 references in your discussion section to help with interpretation of your results. You may cite references that you also cited in your introduction. -->
+<!-- Tip: At the end, I also encourage you to add an additional short paragraph reflecting upon the process of completing this assignment. What did you learn through completing your project? What lessons will you take forward in your future coursework and career? Reflection can help us to solidify our learning and help us to act upon what we have learned in the future. This additional, optional paragraph is not included in the 3-paragraph length limit for this section. -->
+<!-- 9. Acknowledgements (section expected to be present for academic integrity) -->
+<!-- If you received project tips from others, include that information in this section. Briefly, indicate who you talked to, the nature of the advice, and how this impacted your project. You may speak to other class members and the course instructors. It is NOT permitted to complete the assignment for someone else or to copy/paste blocks of code from others. If someone helped you to get unstuck when you were facing an error message, then indicate who and what you learned from this. (To clarify: You ARE allowed to talk to others, but you are NOT permitted to let them fix the problem for you without you actually understanding what is going on. Write about: What was causing the error message, and what did you learn during the process of obtaining help to fix it?) -->
+<!-- 10. References (grade credit for this section is incorporated into Intro and Discussion grades) -->
+<!-- If you cite any sources from the scientific literature, include them here in your reference list. In total for Assignment #5, I suggest consulting and citing 3-6 papers from the literature to help you to develop your idea and/or interpret your results. Ten papers from the literature is the hard maximum for citations, reflecting that you have other assignments and commitments and to encourage some academics/life balance. You may use any of the papers posted to CourseLink or other literature relevant for your project. Additional citations for vignettes, other tutorials, -->
+<!-- 9 -->
+<!-- StackOverflow posts, etc., are not included in the 10-reference limit. You must cite all such sources. -->
+<!-- You would include scientific references as an in-text citation in the relevant sentence of your assignment, i.e. introduction or discussion (e.g. Xu et al. 2020). Also, list the full reference here at the end. If you used any specific online tutorials or a specific StackOverflow posting, for example, you must also include those here. -->
+<!-- You should choose a consistent format for your reference list. If you do not already have a preferred format, then I recommend using a simple format such as the following (which includes authors, year, article title, journal name, volume, and page numbers). Your reference list should be ordered by the last name of the first author of each article. Example: -->
+<!-- Smith AB, Jones CD, and Zhou EF. 2019. The title of the journal article goes here. Journal Name Goes Here, 25: 131-140. -->
+
+
+
+
+#### Silhouette\
+Calculate silhouette index to evaluate internal validity
+```{r Silhouette Index, results = "hold"}
+# #Calculate Silhouette summary for gene1
+# silhouette_gene1 <- silhouette (unlist(gene1_clusters[[1]]),dmatrix = gene1_matrix)
+# summary.silhouette_gene1<-summary(silhouette_gene1)
+# #Output silhouette summary
+# sprintf("Silhouette summary for %s",gene1)
+# summary.silhouette_gene1
+```
+
+Plot Silhouette Analysis
+```{r Silhouette Plot, results = "hold"}
+# #Plot silhouette scores for gene1
+# fviz_silhouette(silhouette_gene1, label=FALSE,print.summary=TRUE,xlab="Cluster",main=sprintf("Silhouette Analysis for Clustering on %s Nucleotide Sequences", gene1),submain=sprintf("Clustering Method: %s; Model of DNA Evolution: %s",clustering.method,chosen.model),palette=c("#660000","purple","orange","blue"))
+```
