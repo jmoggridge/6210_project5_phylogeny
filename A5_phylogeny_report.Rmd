@@ -7,6 +7,7 @@ output:
   pdf_document:
     highlight: kate
     toc: true
+    toc_depth: 3
 urlcolor: blue
 ---
 
@@ -52,15 +53,15 @@ library(ggthemes) # <3 tufte theme for ggplot <3
 library(patchwork) # easy plot assembly using +,/,()
 ```
 
-------
+\newpage
 
 ### 1. Introduction
 
-  Phylogenetic analysis is common in biodiversity studies and environmental assessment, however it can be far from clear how to proceed. Not only are there are various phylogenetic marker genes (or combinations thereof) to assess, types of alignment (nucleic acid or protein, symbolic or structural) and methods for estimating phylogeny (distance, maximum-parsimony, maximum-likelihood). In maximum-likelihood, molecular evolution is modeled as a Markov process (*ie*. memoryless) with parameters for the base frequencies and rates of substitution. More complex models account for different substitution rates and base frequencies, *eg*. General time reversible (GTR). Additional models describe variance in rates across the sequence (+G) and proportion of invariant positions (+I).    
+  Phylogenetic analysis is common in biodiversity studies and environmental assessment, however it can be far from clear how to proceed. Not only are there are various phylogenetic marker genes (or combinations thereof) to assess, types of alignment (nucleic acid or protein, symbolic or structural) and methods for estimating phylogeny (distance, maximum-parsimony, maximum-likelihood). In maximum-likelihood, molecular evolution is modeled as a Markov process (*ie*. memoryless) with parameters for the base frequencies and rates of substitution. More complex models account for different substitution rates and base frequencies, *eg*. general time-reversible (GTR). Additional models describe gamma-distributed variance in rates across sites (+G) and invariant sites (+I).    
     
-   Maximum likelihood-based (ML) phylogenetic clustering methods optimize model parameters to maximize the probability of the data given the model [@Felsenstein1981]. As no model is a perfect representation of nature, we need to apply some measure of goodness-of-fit (*eg* log-likelihood, AIC, BIC) to evaluate competing models [@Posada2001; @Posada2008]. Perhaps this model selection step is unnecessary and we can generally use a complex model, GTR+I+G, as we are not particularly interested in the distances, but rather the phylogenetic inferences that we make based on them[@Abadi2019].   
+   Maximum likelihood-based (ML) phylogenetic clustering methods optimize model parameters to maximize the probability of the data given the model [@Felsenstein1981]. As no model is a perfect representation of nature, we need to apply some measure of goodness-of-fit (log-likelihood, AIC, BIC) to evaluate competing models [@Posada2001; @Posada2008]. Perhaps this model selection step is unnecessary and we can generally use the complex model GTR+I+G, as we are not particularly interested in the distances, but rather the phylogenetic inferences that we make based on them [@Abadi2019].   
     
-   In this work, I sought to explore the impact of model choice in whether model testing is worthwhile. Specifically, I wanted to find out whether different distance models would lead to altered phylogenetic trees. For this, I performed model testing to evaluate AIC, BIC and likelihood criteria, pairwise statistical tests of log-likelihood ratios and tree distances, and a visual comparison of two maximum-likelihood phylogenies in a tanglegram. I chose to use cytochrome c oxidase subunit I sequences of Polynoidae as a model dataset. Polynoidae are a large and speciose family of scale worms that have colonized challenging habitats in the deep sea, including sea caves and hydrothermal vents species[@Zhang2017a]. New species are consistently found in surveys and determining their phylogenetic relationships to known species is of interest[@Hatch2020a].    
+   In this work, I sought to explore the impact of model choice in whether model testing is worthwhile. Specifically, I wanted to find out whether different distance models would lead to altered phylogenetic trees. For this, I performed model testing to evaluate AIC, BIC and likelihood criteria, pairwise statistical tests of log-likelihood ratios and tree distances, and a visual comparison of two maximum-likelihood phylogenies in a tanglegram. I chose to use cytochrome c oxidase subunit I sequences of Polynoidae as a model dataset. Polynoidae are a large and speciose family of scale worms that have colonized challenging habitats in the deep sea, including sea caves and hydrothermal vents species [@Zhang2017a]. New species are consistently found in surveys and determining their phylogenetic relationships to known species is of interest [@Hatch2020a].    
 
 -----
 
@@ -78,11 +79,9 @@ write_rds(polynoids.bold, 'polynoid.raw.rds', compress = 'gz')
   
 Polynoidae sequence data were downloaded from the public Barcode of Life Database (BOLD) api on 2020-12-12, using their `bold` package. There were 1850 specimen records for this taxon in the database in total. The data of interest (identifiers, sequences, and taxonomic names) were saved as `polynoid.raw.rds`.     
   
-----
-
 \newpage
 
-### 3. Data quality control and sample selection
+### 3. Data quality control and filtering, sample selection, and multiple sequence alignment
 
 Functions for filtering and EDA plot
 
@@ -162,6 +161,8 @@ coi.sample.eda <- EDA_plot(polynoids.sample,
          paste('Sampled data: n =', nrow(polynoids.sample)))
 ```
 
+Multiple sequence alignment
+
 ```{r alignment}
 do_alignment <- function(sample.df, names_vector, browse=FALSE, verbose = FALSE){
   # Format and label seqs, reorient reverse complements, align
@@ -197,11 +198,11 @@ rm(polynoids.bold, polynoids.df, trim_and_filter_seqs, EDA_plot, coi.sample.eda,
 
 ### 4. Tools for model tests and phylogenetic analysis
 
-This work relied heavily on the `phangorn` package for maximum-likelihood phylogenetic inference and model tests [@Schliep2011]. Many R packages are available for ML-based phylogenetics (*eg*. RAxML), however `phangorn` has a large selection of models of molecular evolution (I used JC, F81, K80, HKY, SYM, GTR, though there are more) and statistical tests that were well-suited to this analysis; furthermore, any of the substitution models can be paired with +G (gamma-distributed substitution rate variance across sites) or +I (proportion of invariant sites) models, which was not the case with some other packages (eg. `DECIPHER` has no +I and needs to get with the times). Sequence alignment was done with the package `DECIPHER` [@Wright2016], as well as an alternate version of ML phylogenetic clustering for comparison with the best model from `phangorn`. The `ape` package [@Paradis2012]  was used to compute some sequence distances; `dendextend` was used for dendrograms and tanglegrams. For the most part, all these analyses are well-demonstrated in the package vignettes and documentation (see references); this work extends those examples with pairwise statistical tests and tree distance tests for all models, with heatmaps for visualization (`ggplot2`).
+This work relied heavily on the `phangorn` package for maximum-likelihood phylogenetic inference and model tests [@Schliep2011]. Many R packages are available for ML-based phylogenetics (*eg*. RAxML), however `phangorn` has a large selection of models of molecular evolution (I used JC, F81, K80, HKY, SYM, GTR, though there are more) and statistical tests that were well-suited to this analysis; furthermore, any of the substitution models can be paired with +G (gamma-distributed substitution rate variance across sites) or +I (proportion of invariant sites) models, which was not the case with some other packages (eg. `DECIPHER` has no +I and needs to get with the times). Sequence alignment was done with the package `DECIPHER` [@Wright2016], as well as  ML phylogeny (supplemental). The `ape` package [@Paradis2012]  was used to compute some sequence distances; `dendextend` was used for dendrograms and tanglegrams. For the most part, all these analyses are well-demonstrated in the package vignettes and documentation (see references); this work extends those examples with pairwise statistical tests and tree distance tests for all models, with heatmaps for visualization (`ggplot2`).
 
 -----
 
-### 5. Model testing and phylogenetic Analysis
+### 5. Model testing and phylogenetic analysis
 
 Molecular evolution model testing with `phangorn::modelTest`
 
@@ -273,7 +274,7 @@ models.pairwise.df <- get_models_pw_df(models) %>%
   mutate(deltaAICc = AICc.2 - AICc.1)
 ```
 
-Single log-likelihood ratio test for HKY+G+I & GTR+G+I
+Log-likelihood ratio test and tree distance metrics for HKY+G+I versus GTR+G+I
 ```{r}
 # grab best model from test, HKY+G+I
 HKY_IG.phyl <- models.pairwise.df %>% 
@@ -284,9 +285,9 @@ GTR_IG.phyl <- models.pairwise.df %>%
   filter(name1 == "GTR+G+I") %>% 
   pull(model1) %>% pluck(1)
 # do log-likelihood ratio test -> not significant!
-LRT <- anova(HKY_IG.phyl, GTR_IG.phyl)
+anova(HKY_IG.phyl, GTR_IG.phyl)
 # check topological dist -> the only difference is branch lengths!
-treedists <- treedist(HKY_IG.phyl$tree, GTR_IG.phyl$tree)
+treedist(HKY_IG.phyl$tree, GTR_IG.phyl$tree)
 ```
 
 -----
@@ -316,7 +317,7 @@ model_test_plot
 ```
 __Figure 2__. Testing of all DNA substitution models (JC, F81, K80, HKY, TrN, TPM, K81, TIM, TVM, SYM, GTR) with and without added site-specificity (G, I) for the polynoid CO1 sequences, using `phangorn::modelTest`. The AIC, BIC and log likelihood scores (y-axis) are shown for each model (x-axis), where smaller AICc and BIC scores and larger log likelihood scores indicate better fit. The degrees of freedom for each model are included (df). 
 
-```{r, fig.align = 'center', fig.width=8, fig.height=4}
+```{r, fig.align = 'center', fig.width=8.5, fig.height=4.5}
 # Create heatmap for log-likelihood difference
 a <- ggplot(models.pairwise.df, aes(y=name2, x=name1, fill=deltaAICc)) +
   geom_tile(na.rm = TRUE) +
@@ -357,7 +358,7 @@ ggplot(HKY_dendrogram, horiz = TRUE)
 
 ```
   
-  __Figure 4.__ Dendrogram of the maximum-likelihood phylogenetic estimation with the HKY+G+I model.
+  __Figure 4.__ Dendrogram of the maximum-likelihood phylogeny with the HKY+G+I model.
 
 ### 7. Supplemental 
 
@@ -406,7 +407,7 @@ ts_tv.plot <- dist.df %>%
 raw_k80.plot + ts_tv.plot
 rm(raw_k80.plot, ts_tv.plot, dist.df)
 ```
-__Figure 4__. Saturation plots: p-distance underestimates real evolutionary distance as distance increases, while the Kimura 2-parameter is more robust to the saturation of transitions (right). The proportion of transitions to is generally greater that transversions amongst the family Polyploidae, where phylogenetic distances are relatively small and transitions are not entirely saturated; if we were to compare all polychaete species, for example, the lines would cross and transversions would be more common as transitions become saturated. 
+__Figure 5__. Saturation plots: p-distance underestimates real evolutionary distance as distance increases, while the Kimura 2-parameter is more robust to the saturation of transitions (left). The proportion of transitions to is generally greater that transversions amongst the family Polyploidae, where phylogenetic distances are relatively small and transitions are not entirely saturated (right); if we were to compare all polychaete species, for example, the lines would cross and transversions would be more common as transitions become saturated. 
 
 -----
 
@@ -417,13 +418,11 @@ DECIPHER has no implementation of the GTR+I+G model, so I wondered how it's chos
 clusters.ML <- DECIPHER::IdClusters(
   myXStringSet = polynoids.align,
   myDistMatrix = DistanceMatrix(polynoids.align, type='dist'),
-  method = 'ML',  cutoff = 0.2, showPlot = FALSE,
-  type = "both", verbose = FALSE)
+  method = 'ML',  cutoff = 0.2, showPlot = FALSE, type = "both", verbose = FALSE)
 clusters.Dist <- DECIPHER::IdClusters(
   myXStringSet = polynoids.align,
   myDistMatrix = DistanceMatrix(polynoids.align, type='dist'),
-  model = 'TN93', method = 'NJ', cutoff = 0.2, showPlot = FALSE,
-  type = "both", verbose = FALSE)
+  model = 'TN93', method = 'NJ', cutoff = 0.2, showPlot = FALSE, type = "both", verbose = FALSE)
 ```
 
 ```{r tanglegram, fig.height=6, fig.width=7}
@@ -437,27 +436,24 @@ dend.list <- dendlist(
   dendextend::untangle() %>% 
 # Make tanglegram
   tanglegram(
-    match_order_by_labels = TRUE,
-    just_one = TRUE,
-    main_right = 'ML, TN93+G model',
-    main_left = 'dist-based, TN93 model',
-    columns_width = c(6, 1, 6),
-    left_dendo_mar = c(2, 2, 2, 6),
+    main_right = 'ML, TN93+G model', main_left = 'dist-based, TN93 model',
+    match_order_by_labels = TRUE, just_one = TRUE,
+    columns_width = c(6, 1, 6), left_dendo_mar = c(2, 2, 2, 6),
     right_dendo_mar = c(2, 6, 2, 2)
   )
 ```
-
+__Figure 6__. A tanglegram showing differences between a distance-based phylogeny using the Jukes-Cantor model and a ML phylogeny using the TN93+G model, selected based on the Bayesian information criteria (BIC).
 
 ### 8. Results and Discussion
 
 
-There is disagreement in the literature as to whether model selection significantly impacts maximum likelihood (ML) phylogenetic inferences@Abadi2019; @Gerth2019]. In this project, I wanted to see if model selection was in fact a crucial step in an ML phylogenetic analysis of the family Polynoidae, using CO1 DNA sequences. In model testing HKY+I+G was the best performing model across all key criteria (AICc, BIC, log-likelihood; figs. 2, 3-left); however, differences in goodness-of-fit between this model and the most parameter-rich, GTR+G+I, were not significant in a likelihood ratio test. In fact, the inclusion of the variation among sites (+G), and static sites (+I) into the model had much more impact that differences between substitution models (fig.3-left). Further, the model choice did not affect the partitioning of polynoid species whatsoever (according to the Robinson-Folds RF distance), though when branch lengths were accounted for (in weighted RF), the HKY+G, HKY+G+I and GTR+G+I models were slightly different to all other models tested (fig. 3-right). Thus, my results indicated that most parameter-rich models will produce very similar phylogenies and that model testing was unnecessary. This was not unexpected, as Abadi *et al.* (2019) have suggested that ML model testing generally does not greatly impact inferences, in contravention with *eg*. Posada *et al.* (2008). 
+There is disagreement in the literature as to whether model selection significantly impacts maximum likelihood (ML) phylogenetic inferences [@Abadi2019; @Gerth2019]. In this project, I wanted to see if model selection was in fact a crucial step in an ML phylogenetic analysis of the family Polynoidae, using CO1 DNA sequences. In model testing HKY+I+G was the best performing model across all key criteria (figs. 2, 3-left); however, differences in goodness-of-fit between this model and the most parameter-rich, GTR+G+I, were not significant in a likelihood ratio test. Interestingly, the incorporation of rate variation among sites (+G), and static sites (+I) had much more impact that differences between various substitution models (fig.3-left). Further, the model choice did not affect the partitioning of polynoid species whatsoever (according to the Robinson-Folds RF distance), though when branch lengths were accounted for (in weighted RF), the HKY+G, HKY+G+I and GTR+G+I models were slightly different to all other models tested (fig. 3-right). Thus, my results indicated that most parameter-rich models will produce very similar phylogenies and that model testing was unnecessary. This was not unexpected, as Abadi *et al.* (2019) have suggested that ML model testing generally does not greatly impact inferences, in contravention with *eg*. Posada *et al.* (2008). 
 
-Avoiding model testing is most beneficial when datasets are large and optimization of many models would be time-consuming and computationally intensive. Additionally, simpler models would generally only be preferable to the more realistic GTR+I+G when the data are limited and error on parameter estimates large. While my results agree that model testing generally seems unnecessary, this project only used a single, small dataset (n=95 species), of a single region (CO1), and only for DNA sequences (fig. 4); this dataset was drawn from a single speciose family where distances are relatively small (tree height ~ 0.2, depending on model) and was chosen mostly for convenience and tractability. As such, it certainly cannot be said that the results will generalize to all other datasets. Furthermore, some available models were not tested at all for brevity (TIM, TVM) and only a single algorithm, `phangorn::modelTest`[@Schliep2011], was used for testing, though many other similar tools could have been employed for comparison. Perhaps inclusion of all models or other tools could have uncovered a model with significantly better fit or producing different topology. To determine whether model choice impacts phylogenetic inferences in general would require analysis of multiple, varied datasets and this is generally done through simulated data with known topology to evaluate concordance [@Abadi2019]. As such, my results should only be interpreted in the limited context of the Polyploidae CO1 DNA sequences analyzed and the selection of models that were tested. 
+Avoiding model testing is most beneficial when datasets are large and optimization of many models would be time-consuming and computationally intensive. Additionally, simpler models would generally only be preferable to the more realistic GTR+I+G when the data are limited, leading to greater expected error in parameter estimation. While my results agree that model testing generally seems unnecessary, this project only used a single, small dataset (n=95 species), of a single region (CO1), and only for DNA sequences (fig. 4); this dataset was drawn from a single speciose family where distances are relatively small (tree height ~ 0.2, depending on model) and was chosen mostly for convenience and tractability. Furthermore, some available models were not tested at all for brevity (TIM, TVM) and only a single algorithm, `phangorn::modelTest` [@Schliep2011], was used for testing, though many other similar tools could have been employed for comparison. Perhaps inclusion of all models or other tools could have uncovered a model with significantly better fit or producing different topology. To determine whether model choice impacts phylogenetic inferences in general would require analysis of multiple, varied datasets and this is generally done through simulated data with known topology to evaluate concordance [@Abadi2019]. As such, my results should only be interpreted in the limited context of the Polyploidae CO1 DNA sequences analyzed and the selection of models that were tested. 
 
-Model testing is but one step in phylogenetic analysis, albeit a particularly time-consuming one. Many other choices could have a far greater impact on inferences, for example: the selection of phylogenetic marker(s); use of DNA sequences versus their more conserved translations; inclusion of structural information, in the case of rRNAs; alignment parameters, etc. A more complete version of my analysis would have compared the utility of model selection in these various scenarios; this could provide further support to the recent proposition that model selection is unimportant for ML phylogeny estimation [@Abadi2019], or it's rebuttal [@Gerth2019]. This could be particularly helpful in the context of analysis of high-throughput sequencing data, where model selection is a major burden to the speed of the analysis.
+Model testing is but one step in ML phylogenetic analysis, albeit a particularly time-consuming one. Many other choices could have a far greater impact on inferences, for example: the selection of phylogenetic marker(s); use of DNA sequences versus their more conserved translations; inclusion of structural information, in the case of rRNAs; alignment parameters, etc. A more complete version of my analysis would have compared the utility of model selection in these various scenarios; this could provide further support to the recent proposition that model selection is unimportant for ML phylogeny estimation [@Abadi2019], or it's rebuttal [@Gerth2019]. This could be particularly helpful in the context of analysis of high-throughput sequencing data, where model selection may represent a major burden upon computational resources.
 
-Conducting this analysis gave me some extra insight into the details that should be considered when applying ML phylogeny methods to real biological data. While the scope of this project was fairly limited, I gained exposure to many different tools aside from those applied here. Phylogenetic analysis in the R environment was a bit daunting when starting out; though over time, I developed a grasp of the statistical underpinnings of maximum likelihood methods, how a workflow could be structured, which tools are commonly applied, how to evaluate different models, and which additional packages are available for specific tasks such as visualization. This will undoubtedly be of benefit in the future.
+By conducting this analysis, I gained insight into the details that should be considered when applying ML phylogeny methods to real biological data. While the scope of this project was fairly limited, I was exposed to many different methods aside from those applied here. Phylogenetic analysis in the R environment was a bit daunting when starting out; though over time, I developed a grasp of the statistical underpinnings of maximum likelihood methods, how a work-flow could be structured, which tools are commonly applied, how to evaluate different models, and which additional packages are available for specific tasks such as visualization. This will undoubtedly be of benefit when performing phylogenetic analyses in the future.
 
 ----
 
@@ -465,7 +461,6 @@ Conducting this analysis gave me some extra insight into the details that should
 
 I would like to thank Dr. Sarah Adamowicz and Jacqueline May for the advice and support they provided in developing ideas for this analysis and suggestions about which packages and tools might be useful. 
 
-----
 
 ### 10. References
 
@@ -482,7 +477,7 @@ In preparing this work, I found the following tutorials, vignettes, and document
 
 #### Books and Journal Articles
   
-*NB: Any articles not available through the University of Guelph subscriptions were shamelessly pirated through [sci-hub.tw](https://scihubtw.tw/)*
+  - *NB: Any articles not available through the University of Guelph subscriptions were shamelessly pirated through [sci-hub.tw](https://scihubtw.tw/)*
 
 
   
