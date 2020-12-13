@@ -2,38 +2,21 @@
 title: "Comparing models of molecular evolution for phylogenetic analysis of the scale worm family Polynoidae"
 author: "Jason Moggridge 1159229"
 date: "10/12/2020"
-output: pdf_document
-highlight: 'kate'
-urlcolor: blue
 bibliography: polynoid_refs.bib
-toc: true
+output: 
+  pdf_document:
+    highlight: kate
+    toc: true
+urlcolor: blue
 ---
-
-
-<!-- the plan -->
-
-<!-- seqs -->
-<!-- filter, sample -> eda fig 1. -->
-<!-- align -> dna.bin -->
-<!-- basic guide tree (nj) + dist matrix >  -->
-<!-- ML phylogeny model testing -> fig2 -->
-<!-- anova LRT for comparing models -> ? table? matrix? -->
-<!-- dist.topo -> compare multiple models -->
-<!-- one tangle gram between decipher and best phangorn or GTR -->
 
 ----
 
-This work is available on [github](https://github.com/jmoggridge/6210_project5_phylogeny)
+This work is available at [github.com/jmoggridge/6210_project5_phylogeny](https://github.com/jmoggridge/6210_project5_phylogeny)
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(
-  cache = TRUE,
-	echo = TRUE,
-	message = FALSE,
-	warning = FALSE
-)
+knitr::opts_chunk$set(cache = TRUE, echo = TRUE, message = FALSE, warning = FALSE)
 options(tinytex.verbose = TRUE)
-rm(list = ls())
 ```
 
 The following software libraries were used in this work:
@@ -41,42 +24,43 @@ The following software libraries were used in this work:
 ```{r installs, eval=FALSE, include=FALSE}
 # install.packages('tidyverse')
 # install.packages('bold')
-# if (!requireNamespace("BiocManager", quietly = TRUE))
-#     install.packages("BiocManager")
-# BiocManager::install("Biostrings")
 # install.packages('ape')
-# install.packages('DECIPHER')
 # install.packages('phangorn')
 # install.packages('dendextend')
 # install.packages('ggdendro')
 # install.packages('rcartocolor')
 # install.packages('ggthemes')
 # install.packages('patchwork')
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
+# BiocManager::install("Biostrings")
+# install.packages("RSQLite")
+# BiocManager::install('DECIPHER')
 ```
 
 ```{r libraries}
-library(tidyverse)
-library(bold)
-library(Biostrings)
-library(ape)
-library(DECIPHER)
-library(phangorn)
-library(dendextend)
-library(ggdendro)
-library(rcartocolor)
-library(ggthemes)
-library(patchwork)
+library(tidyverse) 
+library(bold) # data source api
+library(Biostrings) # for sequence handling (*clashes w dplyr)
+library(ape) # general phylogeny functions, eg. dist.dna
+library(DECIPHER) # for alignment, etc.
+library(phangorn) # ML phylogeny, model testing
+library(dendextend) # dendrograms, tanglegrams
+# library(phylogram) # loaded later for dendrogram
+library(rcartocolor) # non-ugly discrete color pals
+library(ggthemes) # <3 tufte theme for ggplot <3
+library(patchwork) # easy plot assembly using +,/,()
 ```
 
 ------
 
 ### 1. Introduction
 
-  Phylogenetic analysis is common in biodiversity studies and environmental assessment, however it can be far from clear how to proceed. Not only are there are various phylogenetic marker genes (or combinations thereof) to assess, types of alignment (nucleic acid or protein, symbolic or structural) and methods for estimating phylogeny (distance, maximum-parsimony, maximum-likelihood). In methods based on distance and maximum-likelihood, molecular evolution is modeled as a Markov process (*ie*. memoryless) with parameters for the base frequencies and rates of substitution. More complex models account for different substitution rates and base frequencies (eg, General time reversible). Additional models describe variance in rates across the sequence (+G) and proportion of invariant positions (+I).    
+  Phylogenetic analysis is common in biodiversity studies and environmental assessment, however it can be far from clear how to proceed. Not only are there are various phylogenetic marker genes (or combinations thereof) to assess, types of alignment (nucleic acid or protein, symbolic or structural) and methods for estimating phylogeny (distance, maximum-parsimony, maximum-likelihood). In maximum-likelihood, molecular evolution is modeled as a Markov process (*ie*. memoryless) with parameters for the base frequencies and rates of substitution. More complex models account for different substitution rates and base frequencies, *eg*. General time reversible (GTR). Additional models describe variance in rates across the sequence (+G) and proportion of invariant positions (+I).    
     
-   Maximum likelihood-based (ML) phylogenetic clustering methods optimize model parameters to maximize the probability of the data given the model[@Felsenstein1981]. As no model is a perfect representation of nature, we need to apply some bias (*eg* log-likelihood, AIC, BIC) to evaluate the fit of competing models [@Posada2001]. Perhaps this model selection step is unnecessary and we can generally use the most complex model, GTR+I+G, as we are not particularly interested in the distances, but rather the phylogenetic inferences that we make based on them[@Abadi2019].   
+   Maximum likelihood-based (ML) phylogenetic clustering methods optimize model parameters to maximize the probability of the data given the model [@Felsenstein1981]. As no model is a perfect representation of nature, we need to apply some measure of goodness-of-fit (*eg* log-likelihood, AIC, BIC) to evaluate competing models [@Posada2001; @Posada2008]. Perhaps this model selection step is unnecessary and we can generally use a complex model, GTR+I+G, as we are not particularly interested in the distances, but rather the phylogenetic inferences that we make based on them[@Abadi2019].   
     
-   In this work, I sought to explore the impact of model choice in whether model testing is worthwhile. Specifically, I wanted to find out whether different distance models would lead to altered phylogenetic trees. For this, I performed model testing to evaluate AIC, BIC and likelihood criteria, pairwise statistical tests of log-likelihood ratios and tree distances, and a visual comparison of two maximum-likelihood phylogenies in a tanglegram. I chose to use cytochrome c oxidase subunit I sequences of Polynoidae as a model dataset. Polynoidae are a large and speciose family of scale worms that have colonized challenging habitats in the deep sea, including sea caves and hydrothermal vents species[@Zhang2017a; @Salazar-Vallejo2015]. New species are consistently found in surveys and determining their phylogenetic relationships to known species is of interest[@Norlinder2012; @Hatch2020a].    
+   In this work, I sought to explore the impact of model choice in whether model testing is worthwhile. Specifically, I wanted to find out whether different distance models would lead to altered phylogenetic trees. For this, I performed model testing to evaluate AIC, BIC and likelihood criteria, pairwise statistical tests of log-likelihood ratios and tree distances, and a visual comparison of two maximum-likelihood phylogenies in a tanglegram. I chose to use cytochrome c oxidase subunit I sequences of Polynoidae as a model dataset. Polynoidae are a large and speciose family of scale worms that have colonized challenging habitats in the deep sea, including sea caves and hydrothermal vents species[@Zhang2017a]. New species are consistently found in surveys and determining their phylogenetic relationships to known species is of interest[@Hatch2020a].    
 
 -----
 
@@ -92,42 +76,80 @@ polynoids.bold <- polynoids.bold %>%
 write_rds(polynoids.bold, 'polynoid.raw.rds', compress = 'gz')
 ```
   
-  Polynoidae sequence data were downloaded from the public Barcode of Life Database (BOLD) api on 2020-12-12, using their `bold` package. There were 1850 specimen records for this taxon in the database in total. The data of interest (identifiers, sequences, and taxonomic names) were saved as `polynoid.raw.rds`.     
+Polynoidae sequence data were downloaded from the public Barcode of Life Database (BOLD) api on 2020-12-12, using their `bold` package. There were 1850 specimen records for this taxon in the database in total. The data of interest (identifiers, sequences, and taxonomic names) were saved as `polynoid.raw.rds`.     
+  
 ----
 
-### 3. Selection of cytochrome c oxidase subunit 1 sequences
+\newpage
 
-<!-- 3. Code Section 1 – Data Acquisition, Exploration, Filtering, and Quality Control (25%) -->
+### 3. Data quality control and sample selection
+
+Functions for filtering and EDA plot
 
 ```{r tidy and filter}
-tidy_bold_data <- function(bold.df, markers){
-  # blanks to NA's; strings to factors, except for seqs
-  # remove rows missing genus+species names
+## Selection of data for analysis:
+trim_and_filter_seqs <- function(bold.df, markers, minlen,
+                                 maxlen, Nthreshold){
+  # keep seqs of marker gene; trim N and gaps; 
+  # filter by length and Ns proportion
   bold.df <- bold.df %>%
-    mutate(across(where(is.character), ~na_if(.x, ''))) %>%
-    mutate(across(where(is.character), as_factor)) %>%
-    mutate(nucleotides = as.character(nucleotides))  %>%
-    filter(!is.na(genus_name) & !is.na(species_name)) 
-  return(bold.df)
-}
-trim_and_filter_seqs <- function(bold.df, markers, minlen, maxlen, Nthreshold){
-  bold.df <- bold.df %>%
-    # keep seqs of selected gene; trim N and gaps; 
-    # filter to seqs within length range and Ns threshold
     filter(!is.na(nucleotides) & markercode %in% markers) %>%
     mutate(seq = str_remove_all(nucleotides, '\\s|-|^N+|N+$'),
-           slen = nchar(seq)) %>%
-    filter(slen >= minlen & slen <= maxlen & 
-             str_count(seq, 'N')/slen <= Nthreshold)
+           seqlen = nchar(seq),
+           N.prop = str_count(seq, 'N')/seqlen) %>%
+    filter(seqlen >= minlen & seqlen <= maxlen & N.prop <= Nthreshold)
   return(bold.df)  
 }
+EDA_plot <- function(bold.df, label) {
+  # plot sequence lengths, GC%, species per genus
+  a <- ggplot(bold.df, aes(x = seqlen)) +
+    labs(x = 'Sequence length', subtitle = label) +
+    geom_histogram() + geom_rangeframe() + theme_tufte()
+  b <- bold.df %>%
+    mutate(`% GC` = str_count(seq, '[GC]')/seqlen*100) %>%
+    ggplot(aes(x=`% GC`)) + 
+    geom_histogram() + geom_rangeframe() + theme_tufte()
+  c <-bold.df %>%
+    group_by(genus_name) %>%
+    summarize(species = length(unique(species_name))) %>%
+    ggplot(aes(x=species)) + 
+    xlab('Species per genus') +
+    geom_histogram() + geom_rangeframe() +theme_tufte()
+  return(a|b|c)
+}
+```
 
-# read in data & apply filtering steps
-polynoids.bold <- read_rds('polynoid.raw.rds')
+Selection of *cytochrome c oxidase subunit 1* sequences & QC
+
+```{r tidy and eda, fig.height=2, fig.width=7}
+# read in data & tidy
+polynoids.bold <- read_rds('polynoid.raw.rds') %>%
+  mutate(across(where(is.character), ~na_if(.x, ''))) %>%
+  mutate(across(where(is.character), as_factor)) %>%
+  mutate(nucleotides = as.character(nucleotides)) 
+# remove any specimens missing genus & species names
+polynoids.bold <- polynoids.bold %>%
+  filter(!is.na(genus_name) & !is.na(species_name)) 
+# check out all COI sequences (not shown)
+coi.eda.all <- polynoids.bold %>%
+  trim_and_filter_seqs(markers = 'COI-5P', minlen = 0,
+                       maxlen = 1000, Nthreshold = 1) %>%
+  EDA_plot('all COI')
+summary(str_count(polynoids.bold %>%
+                    trim_and_filter_seqs(markers = 'COI-5P', minlen = 500,
+                                         maxlen = 800, Nthreshold = 1) %>%
+                    pull(seq),'N'))
+
+
+# apply filtering steps
 polynoids.df <- polynoids.bold %>%
-  tidy_bold_data() %>%
-  trim_and_filter_seqs(markers = 'COI-5P', minlen = 630, maxlen = 680, Nthreshold =  0.02)
-# Sample 1 sequence per species for analysis
+  filter(!is.na(genus_name) & !is.na(species_name)) %>%
+  trim_and_filter_seqs(markers = 'COI-5P', minlen = 630,
+                       maxlen = 680, Nthreshold = 0.05)
+coi.eda.filtered <- EDA_plot(polynoids.df, label = 'filtered COI')
+
+# tidy_bold_data() %>%
+# Sample 1 sequence per species for analysis, create labels
 set.seed(1)
 polynoids.sample <- polynoids.df %>%
   group_by(species_name) %>%
@@ -135,56 +157,10 @@ polynoids.sample <- polynoids.df %>%
   data.frame() %>%
   mutate(seqlabel = paste(genus_name, row_number())) %>%
   mutate(across(where(is.factor), fct_drop)) # drop empty factor levels
-```
-
-Only Polynoidae specimens having complete taxonomic information and *cytochrome c oxidase subunit I* (CO1) DNA sequences of appropriate length (630-680 bp), with a low proportion of ambiguous bases (< or = 2%), were retained. This filtered dataset has `r nrow(polynoids.df)` specimens comprised of `r length(unique(polynoids.df$genus_name))` genera, with `r length(unique(polynoids.df$species_name))` species in total. A single representative from each species was chosen at random for alignment and  phylogenetic analysis.
-
-```{r EDA, results = 'hold', fig.height=2, fig.width=6, fig.align='center'}
-EDA_plot <- function(bold.df, label) {
-  # plot sequence lengths, GC%, species per genus
-  a <- ggplot(bold.df, aes(x = slen)) +
-    labs(x = 'Sequence length', subtitle = label) +
-    geom_histogram() + geom_rangeframe() + theme_tufte()
-  b <- bold.df %>%
-    mutate(`% GC` = str_count(seq, '[GC]')/slen*100) %>%
-    ggplot(aes(x=`% GC`)) + 
-    geom_histogram() + geom_rangeframe() + theme_tufte()
-  c <- bold.df %>%
-    group_by(genus_name) %>%
-    summarize(species = length(unique(species_name))) %>%
-    ggplot(aes(x=species)) + 
-    xlab('Species per genus') +
-    geom_histogram() + geom_rangeframe() +theme_tufte()
-  return(a+b+c)
-}
-EDA_plot(polynoids.sample, 
+# Exploratory analysis plot
+coi.sample.eda <- EDA_plot(polynoids.sample, 
          paste('Sampled data: n =', nrow(polynoids.sample)))
-
-rm(polynoids.bold, polynoids.df, tidy_bold_data, trim_and_filter_seqs, EDA_plot)
 ```
-__Figure 1__. Exploratory analysis of sequence length (l), GC composition (c), and species distribution among genera (r) polynoid *cytochrome c oxidase subunit 1* sequences dataset for analysis (with one sequence per species. 
-
-
-### 4. Tools for model tests and phylogenetic analysis
-
-This work relied heavily on the `phangorn` package for maximum-likelihood phylogeny construction and model tests. Many tools are available for maximum-likelihood phylogeny, however `phangorn` has a va
-
-Sequence alignments and an alternate ML phylogenetic clustering were done with the package `DECIPHER`[@Wright2016]. Molecular evolution models were tested in maximum likelihood clustering `phangorn::modelTest`. Alignments in `DECIPHER` are fast and accurate, though many other good choices are available, including the popular `muscle` and `clustal` algorithms. Many implementations of hierarchical clustering are available in R; I chose to use the `DECIPHER` package because of it's integration of multiple tools needed for this analysis into a handy R package. The `ape` package was used to perform model-specific distance calculations (using `dist.dna`) as well as tree-topology comparisons (with `dist.topo`.  For visualizations, I used `ggplot2` for plots, as well as `dendextend` to create dendrograms and tanglegrams. Most of these analyses are explained clearly in the package vignettes (see references), however this work extends those by chaining them together for the comparison of phylogenies with testing and other visualizations.
-
-
-<!-- Silhouette plots were created with... rpartplot -->
-
-<!-- 4. Main Software Tools Description (1 paragraph) (5%) -->
-<!-- 
-Provide a short written description (1 paragraph) about the main software tool you will be using to answer your main question. 
-Why did you make this choice? What are the expected strengths and weaknesses of the tool you chose? Did you consider any alternatives? Cite the authors of the tool you used (you can cite the package itself plus the relevant associated publication, if available). If you are conducting a methodological project involving a comparison of tools, you might briefly describe two main tools in this section. Otherwise, you will typically describe one main software tool. -->
-<!-- Also, in this section, make it clear how you built upon existing vignettes for conducting your project. -->
-
-### 5. Model testing and phylogenetic Analysis
-
-<!-- Code Section 2 – Main Analysis (25%) --><!-- explore the impact of methodological choices upon results. --> <!-- max 3 figures -->
-
-Alignment of sequences using `DECIPHER`
 
 ```{r alignment}
 do_alignment <- function(sample.df, names_vector, browse=FALSE, verbose = FALSE){
@@ -198,14 +174,36 @@ do_alignment <- function(sample.df, names_vector, browse=FALSE, verbose = FALSE)
     }
   return(seqs.aligned)
 }
-# perform alignment and hierarchical clusterings
+# Alignment
 polynoids.align <- do_alignment(polynoids.sample, polynoids.sample$seqlabel)
 polynoids.bin <- as.DNAbin(polynoids.align)
 rm(do_alignment)
 ```
 
 
-Model Testing with `Phangorn`
+Only Polynoidae specimens having complete taxonomic information and *cytochrome c oxidase subunit I* (CO1) DNA sequences of appropriate length (630-680 bp) with no more than 2% ambiguous bases were retained. This filtered dataset has `r nrow(polynoids.df)` specimens from `r length(unique(polynoids.df$genus_name))` genera, with `r length(unique(polynoids.df$species_name))` species in total. A single representative from each species was chosen at random for alignment and  phylogenetic analysis. Sequence properties (length, GC-content) and species distribution among genera were examined during data selection (*eg*. fig. 1). A multiple sequence alignment was performed and checked after sequence orientation.
+
+```{r EDA, echo=FALSE, fig.height=2, fig.width=6, fig.align='center'}
+coi.sample.eda
+```
+__Figure 1__. Exploratory analysis of sequence length (l), GC composition (c), and species distribution among genera (r) in the polynoid *cytochrome c oxidase subunit 1* sequences dataset used in this analysis (with one sequence per species). 
+
+
+```{r include=FALSE}
+rm(polynoids.bold, polynoids.df, trim_and_filter_seqs, EDA_plot, coi.sample.eda, coi.eda.filtered, coi.eda.all)
+```
+
+-----
+
+### 4. Tools for model tests and phylogenetic analysis
+
+This work relied heavily on the `phangorn` package for maximum-likelihood phylogenetic inference and model tests [@Schliep2011]. Many R packages are available for ML-based phylogenetics (*eg*. RAxML), however `phangorn` has a large selection of models of molecular evolution (I used JC, F81, K80, HKY, SYM, GTR, though there are more) and statistical tests that were well-suited to this analysis; furthermore, any of the substitution models can be paired with +G (gamma-distributed substitution rate variance across sites) or +I (proportion of invariant sites) models, which was not the case with some other packages (eg. `DECIPHER` has no +I and needs to get with the times). Sequence alignment was done with the package `DECIPHER` [@Wright2016], as well as an alternate version of ML phylogenetic clustering for comparison with the best model from `phangorn`. The `ape` package [@Paradis2012]  was used to compute some sequence distances; `dendextend` was used for dendrograms and tanglegrams. For the most part, all these analyses are well-demonstrated in the package vignettes and documentation (see references); this work extends those examples with pairwise statistical tests and tree distance tests for all models, with heatmaps for visualization (`ggplot2`).
+
+-----
+
+### 5. Model testing and phylogenetic Analysis
+
+Molecular evolution model testing with `phangorn::modelTest`
 
 ```{r phangorn model test, message=FALSE}
 # need phyDat format for test
@@ -213,163 +211,85 @@ polynoids.phy <- as.phyDat(polynoids.bin)
 # calculate dist, make basic tree, then test subs. models
 polynoids.dist <- phangorn::dist.ml(polynoids.phy, model='JC69')
 polynoids.nj <- NJ(polynoids.dist)
-model_test <- phangorn::modelTest(polynoids.phy, polynoids.nj, control = pml.control(trace=0))
+# test default models selection; trace 0 makes it silent
+model_test <- phangorn::modelTest(
+  polynoids.phy, polynoids.nj, control = pml.control(trace=0)
+  )
+rm(polynoids.phy, polynoids.dist, polynoids.nj)
 ```
 
 
-```{r best model in test, include=FALSE}
-best_BIC <- model_test %>% filter(BIC == min(model_test$BIC)) %>% pull(Model)
-best_AICc <- model_test %>% filter(AICc == min(model_test$AICc)) %>% pull(Model)
-best_logLik <- model_test %>% filter(logLik == max(model_test$logLik)) %>% pull(Model)
-```
-
-
-```{r get phangorn phylo models and do tests}
-get_all_models <- function(model_test_obj){# get models from phangorn modelTest output
-  # adapted from https://rdrr.io/cran/phangorn/man/modelTest.html
-  extract_model <- function(name, env){ # retrieves model from model test output
-    mod <- get(name, env)
-    mod <- eval(mod, env=env)
+```{r get models and do pairwise tests}
+get_all_models <- function(model_test_obj){
+  # get models from phangorn modelTest output using names list
+  extract_model <- function(name, env){ 
+    return(eval(get(name, env), env=env)) # retrieves model from model test output
   }
-  # extract models from model test env object using names list 
   tests.env <- attr(model_test_obj, "env")
   model.names <- ls(env=tests.env)[2:25]
   models <- lapply(model.names, extract_model, tests.env)
   names(models) <- model.names
   return(models)
 }
-get_models_pw_df <- function(models){ # makes long-form df of upper triangle of models' pairwise matrix 
+get_models_pw_df <- function(models){ 
+  # get_models_pw_df makes long-form df of pairwise matrix of models#
   m.names <- names(models)
   m.len <- length(m.names)
+  # create long table of models, pairwise
   models.df <- tibble(
     name1 = rep(m.names, each = m.len),
     name2 = rep(m.names, times = m.len),
     model1 = rep(models, each = m.len),
-    model2 = rep(models, times = m.len)
+    model2 = rep(models, times = m.len),
   ) %>%
-    # keep only 'upper triangle' if df was sq matrix
-    mutate(index1 = match(name1, m.names),
-           index2 = match(name2, m.names)) %>%
-    filter(!index2 <= index1) %>%
-    select(-index1, -index2)
+    # no self-comparison; (make diagonals blanks)
+    filter(!name1==name2) %>%
+    rowwise() %>%
+    mutate(tree1 = list(pluck(model1, 'tree')), 
+           tree2 = list(pluck(model2, 'tree'))) %>%
+    # compute tree dists: Robinson-Foulds, weightedRF, branch-score diff, path diff
+    mutate(
+      RF.dist = phangorn::RF.dist(tree1, tree2, check.labels = TRUE),
+      wRF.dist = phangorn::wRF.dist(tree1, tree2, check.labels = TRUE),
+      KF.dist = phangorn::KF.dist(tree1, tree2, check.labels = TRUE),
+      path.dist = phangorn::path.dist(tree1, tree2, check.labels = TRUE)
+    ) %>%
+    ungroup()
   return(models.df)
 }
-##
-# get all the models and then perform stats tests
-models.pairwise.df <- get_models_pw_df(get_all_models(model_test))  %>%
-  # rowwise because doing row ops with list columns
-  rowwise() %>%
-  # perform pairwise logLik ratio tests
-  mutate(anova = list(anova(model1, model2)))  %>%
-  # grab logLik difference and p-values from LRT anova
-  mutate(anova.loglikdif = pluck(pluck(anova, 4), 2),
-         anova.pr = pluck(pluck(anova, 5), 2),
-         anova.pr = ifelse(is.nan(anova.pr), 1, anova.pr)) %>%
-  # grab phylo trees from model objs
-  mutate(tree1 = list(pluck(model1, 'tree')), 
-         tree2 = list(pluck(model2, 'tree'))) %>%
-  # compute tree dists: RobinsonFoulds, weightedRF, branch-score diff, path diff
-  mutate(
-    RF.dist = phangorn::RF.dist(tree1, tree2, check.labels = TRUE),
-    wRF.dist = phangorn::wRF.dist(tree1, tree2, check.labels = TRUE),
-    KF.dist = phangorn::KF.dist(tree1, tree2, check.labels = TRUE),
-    path.dist = phangorn::path.dist(tree1, tree2, check.labels = TRUE)
-  ) %>%
-  ungroup()
+# get models, make a df, join model scores
+models <- get_all_models(model_test)
+models.df <- enframe(models) %>%
+  left_join(., model_test, by = c('name' = 'Model')) 
+# just want names and AICc scores
+AICc_scores <- model_test %>% select(Model, AICc)
 
-glimpse(models.pairwise.df)
-summary(models.pairwise.df$RF.dist)
-summary(models.pairwise.df$wRF.dist)
-summary(models.pairwise.df$KF.dist)
-summary(models.pairwise.df$path.dist)
-models.pairwise.df %>% filter(name2 == 'HKY+G+I' & name1 == 'GTR+G+I') %>% select(contains('dist'))
-
-models.df <- models.pairwise.df %>%
-  select(name1, model1, tree1) %>%
-  group_by(name1) %>%
-  filter(row_number() == 1)
+# get all the models and perform treedist tests; calc deltaAIC
+models.pairwise.df <- get_models_pw_df(models) %>%
+  left_join(AICc_scores, by = c('name1' = 'Model')) %>%
+  dplyr::rename(AICc.1 = AICc) %>%
+  left_join(AICc_scores, by = c('name2' = 'Model')) %>%
+  dplyr::rename(AICc.2 = AICc) %>%
+  mutate(deltaAICc = AICc.2 - AICc.1)
 ```
 
-
-
-
-<!-- The following models of molecular evolution tested with phangorn: -->
-<!-- - JC: One parameter for all substitutions; equal base frequencies (Jukes and Cantor 1969). -->
-<!-- - F81: Variable base frequencies, equal substitution rates (Felsenstein 1981) -->
-<!-- - GTR: General time-reversible: variable bases, symetric substitution matrix  (Lanave et al. 1984) -->
-<!-- - HKY: Hasegawa-Kishino-Yano: One parameter each for transitions and tranversions, with variable base frequencies (Hasegawa et. al. 1985) -->
-<!-- - K80: One parameter each for transitions and tranversions, with equal base frequencies (Kimura 1980) -->
-<!-- - SYM: Symmetrical substititions with equal base frequencies (Zharkikh 1994) -->
-
-
-
-```{r ML clustering with decipher}
-## Maximum-likelihood hierarchical clustering
-clusters.ML <- DECIPHER::IdClusters(
-  myXStringSet = polynoids.align,
-  myDistMatrix = DistanceMatrix(polynoids.align, type='dist'),
-  method = 'ML', 
-  cutoff = 0.2, showPlot = FALSE,
-  type = "both", verbose = TRUE)
-
-# Distance-based clustering using Jukes Cantor model (basic phylogeny)
-clusters.JC <- DECIPHER::IdClusters(
-  myXStringSet = polynoids.align,
-  myDistMatrix = dist.dna(x = polynoids.bin, model = 'JC',
-             as.matrix = FALSE, pairwise.deletion = TRUE),
-  model = 'JC', method = 'NJ',
-  cutoff = 0.17, showPlot = FALSE,
-  type = "both", verbose = FALSE)
-```
-
-
+Single log-likelihood ratio test for HKY+G+I & GTR+G+I
 ```{r}
-
-# logLik ratio test: DECIPHER ML phylo against best phangon ML phylo
-class(clusters.ML[[2]])
-decip.ML.phyl <- as.phylo(clusters.ML[[2]])
-class(decip.ML.phyl)
-
-phang.ML.phyl <- models.df %>% 
+# grab best model from test, HKY+G+I
+HKY_IG.phyl <- models.pairwise.df %>% 
   filter(name1 == "HKY+G+I") %>% 
-  pull(tree1) %>% pluck(1)
-class(phang.ML.phyl)
-
-treedist(decip.ML.phyl, phang.ML.phyl)
-dist.topo(decip.ML.phyl, phang.ML.phyl)
-RF.dist(decip.ML.phyl, phang.ML.phyl)
-wRF.dist(decip.ML.phyl, phang.ML.phyl)
-
-# phangorn: HKY loglik = -20741.39
-model_test %>% filter(Model=="HKY+G+I") %>% pull(logLik)
-# decipher: TN93+G4 -> -20840
-# decip.ML.phyl <- 
-# 
-# phang.ML.phyl$  
-
-# anova(, phang.ML.phyl)
+  pull(model1) %>% pluck(1)
+# grab most parameter-rich model, GTR+G+I
+GTR_IG.phyl <- models.pairwise.df %>% 
+  filter(name1 == "GTR+G+I") %>% 
+  pull(model1) %>% pluck(1)
+# do log-likelihood ratio test -> not significant!
+LRT <- anova(HKY_IG.phyl, GTR_IG.phyl)
+# check topological dist -> the only difference is branch lengths!
+treedists <- treedist(HKY_IG.phyl$tree, GTR_IG.phyl$tree)
 ```
 
-
-In all criteria, HKY+I+G was the best performing model, however only by a small margin compared to GTR+I+G.
-I performed anovas using the `phangorn` implementation for log-likelihood ratio tests. The difference between HKY+I+G and GTR+I+G was not significant, however difference between the simplest models (non +I+G) and those with I+G parameters were all significant.
-
-TN93+G4 model parameters:
-  - Frequency(A) = 0.249
-  - Frequency(C) = 0.218
-  - Frequency(G) = 0.170
-  - Frequency(T) = 0.364
-  - Rate A <-> G = 2.113
-  - Rate C <-> T = 4.417
-  - Transversion rates = 1
-  - Alpha = 0.502
-
-```{r include=FALSE}
-rm(polynoids.align)
-```
-
-I performed hierarchical clustering with various models (JC, K80, TN93)
-I also did a maximum-likelihood clustering of the sequences to compare with the default settings. 
+-----
 
 ### 6. Figures
 
@@ -378,180 +298,70 @@ I also did a maximum-likelihood clustering of the sequences to compare with the 
 
 
 ```{r model test plot, fig.align='center', fig.height=3.5, fig.width=4}
+# plotted in fig2: logLik, AICc, and BIC; model deg.freedom
 model_test_plot <- model_test %>%
   select(Model, AICc, BIC, logLik, df)  %>%
   pivot_longer(AICc:df) %>%
   mutate(name = as_factor(name)) %>%
-  ggplot() + 
-  geom_point(aes(x=Model, y=value, colour = name)) + 
+  ggplot(aes(x=Model, y=value, colour = name)) + 
+  geom_point() + 
   labs(x = '', y = '') +
   facet_grid(name~., scales = 'free_y') + 
-  scale_color_carto_d() +
-  theme_light() +
+  scale_color_carto_d() + theme_light() +
   theme(legend.position = 'none', 
         axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
         axis.text.y = element_text(size = 7)
   )
-# plotted in 6. Results and discussion
 model_test_plot
 ```
-
-
-<!-- ```{r model test plot2, fig.align='center', fig.height=3.5, fig.width=4} -->
-<!-- model_test_plot2 <- model_test %>% -->
-<!--   select(Model, AICc, BIC, logLik, df) %>% -->
-<!--   pivot_longer(AICc:df) %>% -->
-<!--   mutate(name = as_factor(name), -->
-<!--          score2 = ifelse(Model %in% c('GTR+I+G', 'HKY+I+G'), -->
-<!--                          value, NA), -->
-<!--          name2 = ifelse(Model %in% c('GTR+I+G', 'HKY+I+G'), -->
-<!--                          Model, NA)) %>% -->
-<!--   ggplot() +  -->
-<!--   geom_density(aes(x=value, colour = name)) +  -->
-<!--   # geom_vline(aes(x=score2)) + -->
-<!--   labs(x = '', y = 'density') + -->
-<!--   facet_wrap(~name, ncol=1, scales = 'free') +  -->
-<!--   scale_color_carto_d(palette = 2) + -->
-<!--   theme_light() +theme(legend.position = 'none') -->
-<!-- model_test_plot2 -->
-<!-- ``` -->
 __Figure 2__. Testing of all DNA substitution models (JC, F81, K80, HKY, TrN, TPM, K81, TIM, TVM, SYM, GTR) with and without added site-specificity (G, I) for the polynoid CO1 sequences, using `phangorn::modelTest`. The AIC, BIC and log likelihood scores (y-axis) are shown for each model (x-axis), where smaller AICc and BIC scores and larger log likelihood scores indicate better fit. The degrees of freedom for each model are included (df). 
 
-
-```{r fig.width=8, fig.height=7}
+```{r, fig.align = 'center', fig.width=8, fig.height=4}
 # Create heatmap for log-likelihood difference
-a <- ggplot(models.pairwise.df, aes(y=name2, x=name1, fill=anova.loglikdif)) +
-  geom_tile(na.rm = TRUE, ) +
+a <- ggplot(models.pairwise.df, aes(y=name2, x=name1, fill=deltaAICc)) +
+  geom_tile(na.rm = TRUE) +
+  scale_fill_viridis_c(option='D',direction = -1) +
   theme_light() +
-  scale_fill_viridis_c(option='C') +
   labs(x='', y='', 
-       fill='difference in \nlog-likelihood:\nll(x) - ll(y)') +
+       fill='AICc(y) - AICc(x)') +
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
         legend.position = 'left')
-# Create heatmap for p-values
-b <- ggplot(models.pairwise.df, aes(y=name2, x=name1, fill=anova.pr)) +
+# Create heatmap for weighted Robinson-Foulds distance
+b <- models.pairwise.df %>%
+  # keep only 'upper triangle' if df was sq matrix
+  mutate(index1 = match(name1, names(models)),
+         index2 = match(name2, names(models))) %>%
+  filter(!index2 <= index1) %>%
+  select(-index1, -index2) %>%
+  ggplot(aes(y=name2, x=name1, fill=wRF.dist)) +
   geom_tile(na.rm = TRUE) +
+  scale_fill_viridis_c(option='C') +
   theme_light() +
-  scale_fill_viridis_c(option='D',direction = -1) +
-  labs(x='', y='',
-       fill='p-value') +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
-        legend.position = 'top')
-c <- ggplot(models.pairwise.df, aes(y=name2, x=name1, fill=wRF.dist)) +
-  geom_tile(na.rm = TRUE) +
-  theme_light() +
-  scale_fill_viridis_c(option='A',direction = 1) +
   labs(x='', y='',
        fill='wieghted RF distance') +
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
-        legend.position = 'left')
-(a+b)/(c+plot_spacer())
+        legend.position = 'top')
+(a+b)
 
 ```
-__Figure 3__. Heatamaps for the difference in log-likelihood between each pair of models (left) and associated p-values (right) from pairwise likelihood ratio tests of all models tested using `phangorn`.
+__Figure 3__. Heatamaps for the difference in AIC with small-samples correction (AICc) between each pair of models (left), and weighted Robinson-Foulds topological distance from pairwise comparisons all models tested using `phangorn` (right). Note that smaller AICc scores indicate better fit, so rows that have smaller delta(AICc) values represent better models (and the opposite is true for columns), where deltaAICc = AICc(model.y) - AICc(model.x).
 
 
-```{r tanglegram JC v ML, fig.align='center', fig.width=8, fig.height=6}
-get_entang_val <- function(dend1, dend2){
-  # gets the entanglement score for two dendrograms
-  dend1 <- match_order_by_labels(dend1, dend2) 
-  dend.list <- dendlist(dend1, dend2)
-  entangle.val <- entanglement(dend.list) # calculate entanglement
-  return(entangle.val)
-}
+```{r fig.height=6, fig.width=4}
+library(phylogram)
+# need `phylogram` library to convert class phylo to dendrogram
+HKY_dendrogram <- as.dendrogram(HKY_IG.phyl$tree) %>%
+  set('labels_cex', 0.4) %>%
+  color_branches(k=38) 
+ggplot(HKY_dendrogram, horiz = TRUE)
 
-make_tanglegram <- function(dend1, dend2, title1, title2){
-  # makes a tanglegram from 2 dendrograms after orienting leaves
-  dend1 <- match_order_by_labels(dend1, dend2)
-  dend.list <- dendlist(
-    dend1 %>% set('labels_cex', 0.65) %>% set("branches_lwd", 1),
-    dend2 %>% set('labels_cex', 0.65) %>% set("branches_lwd", 1)
-    )
-  gram <- dend.list %>% 
-    # need dendext function here, not phytools
-    dendextend::untangle() %>% 
-    tanglegram(
-      main_left = title1,
-      main_right = title2,
-      just_one = TRUE,
-      columns_width = c(6,2,6),
-      left_dendo_mar = c(2, 2, 2, 6),
-      right_dendo_mar = c(2, 6, 2, 2),
-      # common_subtrees_color_branches = TRUE,
-      # common_subtrees_color_lines = TRUE,
-      # highlight_distinct_edges = FALSE
-      match_order_by_labels = TRUE
-      )
-}
-
-tang_val_JC_ML <- get_entang_val(clusters.JC[[2]], clusters.ML[[2]])
-tang_val_JC_ML
-tangle_JC_ML <- make_tanglegram(clusters.JC[[2]], clusters.ML[[2]], 'JC distance based',  'TN93 + G maximum likelihood' )
 ```
-
-```{r}
-# library(phylogram)
-# dend.list <- dendlist(
-#    phylogram::as.dendrogram.phylo(fitJC$tree) %>%
-#       set('labels_cex', 0.65) %>% set("branches_lwd", 1),
-#    phylogram:: as.dendrogram.phylo(fitGTR$tree) %>%
-#       set('labels_cex', 0.65) %>% set("branches_lwd", 1)
-#     ) %>%
-#   dendextend::untangle() %>% 
-# # Make tanglegram
-#   tanglegram(
-#     match_order_by_labels = TRUE,
-#     just_one = TRUE,
-#     color_branches = TRUE,
-#     columns_width = c(6, 1, 6),
-#     left_dendo_mar = c(2, 2, 2, 6),
-#     right_dendo_mar = c(2, 6, 2, 2)
-#   )
-```
-
-```{r tanglegram JC v ML2, fig.align='center', fig.width=8, fig.height=6}
-dend.list <- dendlist(
-    clusters.JC[[2]] %>% set('labels_cex', 0.65) %>% set("branches_lwd", 1),
-    clusters.ML[[2]] %>% set('labels_cex', 0.65) %>% set("branches_lwd", 1)
-    ) %>%
-  dendextend::untangle() %>% 
-# Make tanglegram
-  tanglegram(
-    match_order_by_labels = TRUE,
-    just_one = TRUE,
-    columns_width = c(6, 1, 6),
-    left_dendo_mar = c(2, 2, 2, 6),
-    right_dendo_mar = c(2, 6, 2, 2)
-  )
-```
-
-```{r}
-ape::dist.topo(as.phylo(clusters.JC[[2]]),
-               as.phylo(clusters.ML[[2]]))
-```
-
-<!-- The topological distance is defined as twice the number of internal branches defining different bipartitions of the tips (Robinson and Foulds 1981; Penny and Hendy 1985). Rzhetsky and Nei (1992) proposed a modification of the original formula to take multifurcations into account. -->
-
-<!-- The branch length score may be seen as similar to the previous distance but taking branch lengths into account. Kuhner and Felsenstein (1994) proposed to calculate the square root of the sum of the squared differences of the (internal) branch lengths defining similar bipartitions (or splits) in both trees. -->
-<!-- Two methods are available: the one by Penny and Hendy (1985, originally from Robinson and Foulds 1981), and the branch length score by Kuhner and Felsenstein (1994). The trees are always considered as unrooted. -->
-
-
+  
+  __Figure 4.__ Dendrogram of the maximum-likelihood phylogenetic estimation with the HKY+G+I model.
 
 ### 7. Supplemental 
 
-<!-- Bonus Section (Optional) (5%) -->
-<!-- This section can contain whatever you want! This is your chance to do something of interest to you, which is related to your overall topic, but which didn’t fit into the mandatory sections. -->
-<!-- An example of a topic that could go here would be benchmarking your analysis for computational speed and/or for accuracy (against comparator tools). Or, you could include supplementary statistical testing (e.g. testing whether your results are sensitive to your analytical choices in your main analysis section). You could also include supplementary visualizations of your choosing. -->
-<!-- The maximum length of this section is 2 pages of your final PDF assignment. Any content above the two-page limit for this section will not be graded. This could consist of prose, commented code, statistical results, and/or visualizations (your choice). -->
-<!-- Tip: Please note that the credit weighting associated with this section is small. So, I suggest ensuring that you have completed a high-quality project for all of the other sections before preparing anything for this section. -->
-<!-- Note: The presence of this section means that a grade for Assignment #5 could hypothetically go above 100% (to a maximum of 105%). However, overall course grades are capped at 100% maximum. -->
-
-
-Saturation plots:
-P-distance and Kimura 2-parameter distance.  
-Transitions and transversions as a function of distance.
-
-```{r supPlot1, fig.height=2.5, fig.width=5, fig.align='center'}
+```{r supPlot1, echo = FALSE, fig.height=2.5, fig.width=5.5, fig.align='center'}
 distVector <- function(model, dnabin){
   # return numeric vector of the upper triangle of the distance matrix
   dist <- dist.dna(x = dnabin,
@@ -560,15 +370,12 @@ distVector <- function(model, dnabin){
                    pairwise.deletion = TRUE)
   return(as.numeric(dist))
 }
-
 # Molecular evolution analysis ----
 # create a df with all the distance measures as columns
 dist.df <- tibble(model = c('raw','jc69','N', 'k80', 'tn93', 'gg95', 'TS', 'TV')) %>%
   mutate(data = lapply(model, function(x) distVector(x, polynoids.bin))) %>%
   pivot_wider(names_from = 'model', values_from = 'data') %>%
   unnest(cols = raw:TV)
-
-glimpse(dist.df)
 
 # plot p-distance ~ k80 distance
 raw_k80.plot <- dist.df %>%
@@ -579,10 +386,8 @@ raw_k80.plot <- dist.df %>%
     data = data.frame(x = seq(0, 1, 0.05), y = seq(0, 1, 0.05), group = factor('group')),
     aes(x = x, y = y, group = group), alpha = 0.7, lty = 2) +
   theme_classic() +
-  xlim(c(0, 0.72)) +
-  ylim(c(0, 0.45)) +
-  labs(x = 'K2P distance', y = 'p-distance (raw)',
-       subtitle = 'Saturation plot:\n distances of Polychaete CO1 sequences')
+  xlim(c(0, 0.4)) + ylim(c(0, 0.4)) +
+  labs(x = 'K2P distance', y = 'p-distance (raw)')
 
 # plot transitions and transversions ~ k80 distance
 ts_tv.plot <- dist.df %>%
@@ -596,253 +401,90 @@ ts_tv.plot <- dist.df %>%
   geom_smooth(method = 'loess', formula = 'y~x', se=FALSE) +
   theme_classic() +
   scale_color_carto_d('Type') +
-  guides(
-    colour = guide_legend(override.aes = list(size=5, alpha=1, pch=15))
-    ) +
-  labs(
-    x = 'K2P distance',
-    y = 'Substiutions',
-    title = '',
-    subtitle = 'Transitions and transverions by K2P distance\n in Polynoidae COI sequences'
-    )
+  guides(colour = guide_legend(override.aes = list(size=5, alpha=1, pch=15))) +
+  labs(x = 'K2P distance', y = 'Substiutions')
 raw_k80.plot + ts_tv.plot
 rm(raw_k80.plot, ts_tv.plot, dist.df)
 ```
+__Figure 4__. Saturation plots: p-distance underestimates real evolutionary distance as distance increases, while the Kimura 2-parameter is more robust to the saturation of transitions (right). The proportion of transitions to is generally greater that transversions amongst the family Polyploidae, where phylogenetic distances are relatively small and transitions are not entirely saturated; if we were to compare all polychaete species, for example, the lines would cross and transversions would be more common as transitions become saturated. 
 
-I attempted to align translated sequences, however the results were not impressive. The alignment has several sequences that did not align at all. I suspect that the `aligntranslation` algorithm could not find the correct reading frame automatically and that to do so would require manually trimming sequences to setting the reading frame to begin at a codon; this did not seem feasible to do within the scope of the project. As such, left this out of the analysis.
+-----
 
-```{r eval = FALSE}
-# translated alignment performs really poorly
-align.translated <- DECIPHER::AlignTranslation(DNAStringSet(polynoids.sample$seq), verbose = FALSE)
-# BrowseSeqs(align.translated)
+DECIPHER has no implementation of the GTR+I+G model, so I wondered how it's chosen model would compare. TN93+G(4) was chosen and the scores were very similar to the HKY+G+I model generated in the `phangorn` model testing. I also wanted to see how different the phylogenies would be compared a distance-based method with the same substitution model. 
+
+```{r ML clustering with decipher, message=FALSE}
+## Maximum-likelihood hierarchical clustering
+clusters.ML <- DECIPHER::IdClusters(
+  myXStringSet = polynoids.align,
+  myDistMatrix = DistanceMatrix(polynoids.align, type='dist'),
+  method = 'ML',  cutoff = 0.2, showPlot = FALSE,
+  type = "both", verbose = FALSE)
+clusters.Dist <- DECIPHER::IdClusters(
+  myXStringSet = polynoids.align,
+  myDistMatrix = DistanceMatrix(polynoids.align, type='dist'),
+  model = 'TN93', method = 'NJ', cutoff = 0.2, showPlot = FALSE,
+  type = "both", verbose = FALSE)
 ```
 
-
-Comparing distance-based phylogenies in tanglegrams (JC, K80, TN93)
-
-```{r distance-based phylog tanglegrams, eval=FALSE, include=FALSE, fig.align='center', fig.width=8, fig.height=6}
-
-do_clustering <- function(dnabin, model, threshold, algo){
-  # performs h.clustering w chosen model, algorithm, & threshold
-  DECIPHER::IdClusters(
-    dist.dna(x = dnabin, model = model,
-             as.matrix = FALSE, pairwise.deletion = TRUE),
-    method = algo, cutoff = threshold, verbose = FALSE,
-    showPlot = FALSE, type = "both")
-} 
-
-# Clustering by three models JC (jc69), K2P (k80), and TN93
-models <- c('jc69', 'k80', 'tn93')
-clusters <- lapply(models, function(x) do_clustering(polynoids.bin, x, 0.2, 'NJ'))
-names(clusters) <- models
-dendros <- lapply(clusters, '[[', 2)
-names(dendros) <- models
-
-get_entang_val <- function(dend1, dend2){
-  # gets the entanglement score for two dendrograms
-  dend1 <- match_order_by_labels(dend1, dend2) 
-  dend.list <- dendlist(dend1, dend2)
-  entangle.val <- entanglement(dend.list) # calculate entanglement
-  return(entangle.val)
-}
-make_tanglegram <- function(dend1, dend2, title1, title2){
-  # makes a tanglegram from 2 dendrograms after orienting leaves
-  # dend1 <- match_order_by_labels(dend1, dend2) 
-  dend.list <- dendlist(
-    dend1 %>% set('labels_cex', 0.55) %>% set("branches_lwd", 1),
-    dend2 %>% set('labels_cex', 0.55) %>% set("branches_lwd", 1)
-    )
-  gram <- dend.list %>% dendextend::untangle() %>% # need dendext function
-    tanglegram(
-      main_left = title1,
-      main_right = title2,
-      just_one = TRUE,
-      columns_width = c(5,1,5),
-      left_dendo_mar = c(2, 2, 2, 4),
-      right_dendo_mar = c(2, 4, 2, 2),
-      match_order_by_labels = TRUE,
-      common_subtrees_color_branches = TRUE,
-      highlight_distinct_edges = FALSE) 
-}
-tang_val_K80_JC <- get_entang_val(dendros[[2]], dendros[[1]])
-tang_val_TN93_JC <- get_entang_val(dendros[[3]], dendros[[1]])
-tang_val_K80_TN93 <- get_entang_val(dendros[[2]], dendros[[3]])
-par(mfrow = c(1,3))
-tangle_K80_JC <- make_tanglegram(dendros[[2]], dendros[[1]], 'K80','JC')
-tangle_TN93_JC <- make_tanglegram(dendros[[3]], dendros[[1]], 'TN93', 'JC')
-tangle_K80_TN93 <- make_tanglegram(dendros[[2]], dendros[[3]], 'K80', 'TN93')
-
-# library(phytools)
-
-class(dendros[[1]])
-names(dendros)
-phylos <- lapply(dendros, as.phylo)
-# phylos <- phytools::as.multiPhylo(phylos[[1]], phylos[[2]], phylos[[3]])
-# class(phylos)
-RH_JC_k80 <- ape::dist.topo(phylos[[1]], phylos[[2]], method = 'PH85')
-RH_JC_tn93 <- ape::dist.topo(phylos[[1]], phylos[[3]], method = 'PH85')
-RH_k80_tn93 <- ape::dist.topo(phylos[[2]], phylos[[3]], method = 'PH85')
-score_JC_k80 <- ape::dist.topo(phylos[[1]], phylos[[2]], method = 'score')
-score_JC_tn93 <- ape::dist.topo(phylos[[1]], phylos[[3]],  method = 'score')
-score_k80_tn93 <- ape::dist.topo(phylos[[2]], phylos[[3]],  method = 'score')
+```{r tanglegram, fig.height=6, fig.width=7}
+# library(phylogram)
+dend.list <- dendlist(
+    clusters.Dist[[2]] %>% set('labels_cex', 0.65) %>%
+      set("branches_lwd", 1),
+    clusters.ML[[2]] %>% set('labels_cex', 0.65) %>%
+      set("branches_lwd", 1)
+    ) %>%
+  dendextend::untangle() %>% 
+# Make tanglegram
+  tanglegram(
+    match_order_by_labels = TRUE,
+    just_one = TRUE,
+    main_right = 'ML, TN93+G model',
+    main_left = 'dist-based, TN93 model',
+    columns_width = c(6, 1, 6),
+    left_dendo_mar = c(2, 2, 2, 6),
+    right_dendo_mar = c(2, 6, 2, 2)
+  )
 ```
+
 
 ### 8. Results and Discussion
-<!-- Result + Discussion section: -->
-<!-- o Paragraph 1: Return to your original question. What is the answer to your question? What did you discover? Were your results as expected or not? -->
-In this project, I...
-<!-- o Paragraph 2: Briefly describe any key caveats of your study. For example, are the conclusions that can be drawn limited by sample size or any other concerns? Were there biases in data availability that could have impacted your project? -->
-Only one dataset was used and my findings may not generalize to other sets of sequences. 
-
-Simulated data with known topology and rates of substitution might be better suited for these analyses (as was done in Abadi et al. 2019), though I was interested in the model testing process for a given dataset of interest. 
-Only DNA-sequence based phylogenies were compared, though CO1 protein sequences might be preferable for building the polynoid phylogenies.
-I took a single sequence as a representative, though it would have been preferable to create a consensus for each species (eg. usng `DECIPHER::IdConsensus`).
-
-While the actual phylogeny itself was not the subject of study, it should be noted that BOLD data may be erroneously labeled in terms of taxonomy.
-
-My results largely indicated that most parameter-rich models produce very similar phylogenies. When datasets are large and model testing would be time-consuming, I would agree that model testing generally seems unnecessary. 
-<!-- o Paragraph 3: What would be the next steps for this research? What would you do next if you had more time and if you were going to develop this work into a larger project? Did your results reveal any interesting preliminary findings that would be worthy of follow-up study? -->
-<!-- Guidelines: Please see introduction for length guidelines for written paragraphs. -->
-<!-- Tip: I suggest that you consider citing 2-4 references in your discussion section to help with interpretation of your results. You may cite references that you also cited in your introduction. -->
-<!-- Tip: At the end, I also encourage you to add an additional short paragraph reflecting upon the process of completing this assignment. What did you learn through completing your project? What lessons will you take forward in your future coursework and career? Reflection can help us to solidify our learning and help us to act upon what we have learned in the future. This additional, optional paragraph is not included in the 3-paragraph length limit for this section. -->
-
-A model that treats each substitution differently is more likely to accurately represent evolutionary processes; for example, cytosine deamination, leading to a C to T substitution, is particularly common. However, parameter estimates from maximum likelihood optimization will have greater error as the number of parameters increases. This may be important to consider if the number of sequences is small and parameter estimates are not as precise. In the TN93 model chosen in ML clustering of polynoid CO1 sequences, the estimate for C-T transitions (4.5) was more than double that of A-G transitions (2.1)
 
 
-Maximum-likelihood clustering was performed and the model selected (having the lowest BIC in this case) was TN93+G, which fit better than the HKY model chosen by the earlier model testing with `phangorn`. Annoyingly, the `DECIPHER` does not have an implementation of GTR for comparison.
+There is disagreement in the literature as to whether model selection significantly impacts maximum likelihood (ML) phylogenetic inferences@Abadi2019; @Gerth2019]. In this project, I wanted to see if model selection was in fact a crucial step in an ML phylogenetic analysis of the family Polynoidae, using CO1 DNA sequences. In model testing HKY+I+G was the best performing model across all key criteria (AICc, BIC, log-likelihood; figs. 2, 3-left); however, differences in goodness-of-fit between this model and the most parameter-rich, GTR+G+I, were not significant in a likelihood ratio test. In fact, the inclusion of the variation among sites (+G), and static sites (+I) into the model had much more impact that differences between substitution models (fig.3-left). Further, the model choice did not affect the partitioning of polynoid species whatsoever (according to the Robinson-Folds RF distance), though when branch lengths were accounted for (in weighted RF), the HKY+G, HKY+G+I and GTR+G+I models were slightly different to all other models tested (fig. 3-right). Thus, my results indicated that most parameter-rich models will produce very similar phylogenies and that model testing was unnecessary. This was not unexpected, as Abadi *et al.* (2019) have suggested that ML model testing generally does not greatly impact inferences, in contravention with *eg*. Posada *et al.* (2008). 
 
+Avoiding model testing is most beneficial when datasets are large and optimization of many models would be time-consuming and computationally intensive. Additionally, simpler models would generally only be preferable to the more realistic GTR+I+G when the data are limited and error on parameter estimates large. While my results agree that model testing generally seems unnecessary, this project only used a single, small dataset (n=95 species), of a single region (CO1), and only for DNA sequences (fig. 4); this dataset was drawn from a single speciose family where distances are relatively small (tree height ~ 0.2, depending on model) and was chosen mostly for convenience and tractability. As such, it certainly cannot be said that the results will generalize to all other datasets. Furthermore, some available models were not tested at all for brevity (TIM, TVM) and only a single algorithm, `phangorn::modelTest`[@Schliep2011], was used for testing, though many other similar tools could have been employed for comparison. Perhaps inclusion of all models or other tools could have uncovered a model with significantly better fit or producing different topology. To determine whether model choice impacts phylogenetic inferences in general would require analysis of multiple, varied datasets and this is generally done through simulated data with known topology to evaluate concordance [@Abadi2019]. As such, my results should only be interpreted in the limited context of the Polyploidae CO1 DNA sequences analyzed and the selection of models that were tested. 
 
-In the model test using `phangorn` however, the HKY+G+I model had the lowest Aikake information criterion with correction for small samples (AICc) and Bayesian information criterion (BIC), as well as the greatest log likelihood. Overall, the inclusion of the variation among sites (+G), and static sites (+I) into the model had more impact that differences between substitution models.
+Model testing is but one step in phylogenetic analysis, albeit a particularly time-consuming one. Many other choices could have a far greater impact on inferences, for example: the selection of phylogenetic marker(s); use of DNA sequences versus their more conserved translations; inclusion of structural information, in the case of rRNAs; alignment parameters, etc. A more complete version of my analysis would have compared the utility of model selection in these various scenarios; this could provide further support to the recent proposition that model selection is unimportant for ML phylogeny estimation [@Abadi2019], or it's rebuttal [@Gerth2019]. This could be particularly helpful in the context of analysis of high-throughput sequencing data, where model selection is a major burden to the speed of the analysis.
 
-Augmented models account for the substitution rate variance among sites: '+G' indicates inclusion of gamma-distributed rate variation among sites; '+I' allows for a proportion of static sites.
-
-Using the `dist.topo` metric (from `ape`) to compare tree by their topological distances (ie. Robinson-Foulds distance),
-<!-- I found that the JC and TN93 models produced the most similar trees , while K2P and TN93 models produced the most disparate trees. Branch-length scoring produced similar results. -->
-
-
-
-
+Conducting this analysis gave me some extra insight into the details that should be considered when applying ML phylogeny methods to real biological data. While the scope of this project was fairly limited, I gained exposure to many different tools aside from those applied here. Phylogenetic analysis in the R environment was a bit daunting when starting out; though over time, I developed a grasp of the statistical underpinnings of maximum likelihood methods, how a workflow could be structured, which tools are commonly applied, how to evaluate different models, and which additional packages are available for specific tasks such as visualization. This will undoubtedly be of benefit in the future.
 
 ----
 
 ### 9. Acknowledgements
-<!-- 9. Acknowledgements (section expected to be present for academic integrity) -->
-<!-- If you received project tips from others, include that information in this section. Briefly, indicate who you talked to, the nature of the advice, and how this impacted your project. You may speak to other class members and the course instructors. It is NOT permitted to complete the assignment for someone else or to copy/paste blocks of code from others. If someone helped you to get unstuck when you were facing an error message, then indicate who and what you learned from this. (To clarify: You ARE allowed to talk to others, but you are NOT permitted to let them fix the problem for you without you actually understanding what is going on. Write about: What was causing the error message, and what did you learn during the process of obtaining help to fix it?) -->
-In preparing this work, I found the following tutorials most helpful:
 
-[The art of multiple sequence alignment in R by E.S. Wright](https://www.bioconductor.org/packages/release/bioc/vignettes/DECIPHER/inst/doc/ArtOfAlignmentInR.pdf)
+I would like to thank Dr. Sarah Adamowicz and Jacqueline May for the advice and support they provided in developing ideas for this analysis and suggestions about which packages and tools might be useful. 
 
-[Introduction to `dendextend` by T. Galili](https://cran.r-project.org/web/packages/dendextend/vignettes/dendextend.html)
-
-[Estimating phylogenetic trees with phangorn by K.P. Schliep](https://cran.r-project.org/web/packages/phangorn/vignettes/Trees.pdf)
-
-[Genetic data analysis using R: introduction to phylogenetics by T. Jombart](http://adegenet.r-forge.r-project.org/files/MRC-session2-tuto.1.3.pdf)
-
-The chapter 'Phylogeny Estimation' in  "Analysis of Phylogenetics and Evolution with R" by the `ape` author E. Paradis (available through the Guelph library), was particularly helpful for basic aspects of distance-based and maximum likelihood- based phylogeny methods.
-
-Last but not least, I would like to thank Dr. Sarah Adamowicz and Jacqueline May for the advice and support they provided, and my 6210 classmates for various inspirations.
-
+----
 
 ### 10. References
 
+In preparing this work, I found the following tutorials, vignettes, and documentation most helpful:
+
+  - [Estimating phylogenetic trees with phangorn, K.P. Schliep](https://cran.r-project.org/web/packages/phangorn/vignettes/Trees.pdf)  
+  - [Phagorn specials vignette, K.P. Schliep](https://cran.r-project.org/web/packages/phangorn/vignettes/phangorn-specials.pdf)   
+  - [Getting the models from the output of `phangorn::modelTest`](https://rdrr.io/cran/phangorn/man/modelTest.html)  
+  - [The art of multiple sequence alignment in R by E.S. Wright](https://www.bioconductor.org/packages/release/bioc/vignettes/DECIPHER/inst/doc/ArtOfAlignmentInR.pdf)  
+  - [Introduction to `dendextend` by T. Galili](https://cran.r-project.org/web/packages/dendextend/vignettes/dendextend.html)  
+  - [Genetic data analysis using R: introduction to phylogenetics by T. Jombart](http://adegenet.r-forge.r-project.org/files/MRC-session2-tuto.1.3.pdf)
+
+----
+
+#### Books and Journal Articles
+  
 *NB: Any articles not available through the University of Guelph subscriptions were shamelessly pirated through [sci-hub.tw](https://scihubtw.tw/)*
-<!-- references automatically inserted here from the bib file `polynoid_refs.bib` -->
-
-<!-- 10. References (grade credit for this section is incorporated into Intro and Discussion grades) -->
-<!-- If you cite any sources from the scientific literature, include them here in your reference list. In total for Assignment #5, I suggest consulting and citing 3-6 papers from the literature to help you to develop your idea and/or interpret your results. Ten papers from the literature is the hard maximum for citations, reflecting that you have other assignments and commitments and to encourage some academics/life balance. You may use any of the papers posted to CourseLink or other literature relevant for your project. Additional citations for vignettes, other tutorials, -->
-<!-- 9 -->
-<!-- StackOverflow posts, etc., are not included in the 10-reference limit. You must cite all such sources. -->
-<!-- You would include scientific references as an in-text citation in the relevant sentence of your assignment, i.e. introduction or discussion (e.g. Xu et al. 2020). Also, list the full reference here at the end. If you used any specific online tutorials or a specific StackOverflow posting, for example, you must also include those here. -->
-<!-- You should choose a consistent format for your reference list. If you do not already have a preferred format, then I recommend using a simple format such as the following (which includes authors, year, article title, journal name, volume, and page numbers). Your reference list should be ordered by the last name of the first author of each article. Example: -->
-<!-- Smith AB, Jones CD, and Zhou EF. 2019. The title of the journal article goes here. Journal Name Goes Here, 25: 131-140. -->
 
 
-
-
-<!-- ```{r modify dendrograms, include=FALSE, fig.height=6} -->
-<!-- fix_dendrogram <- function(dendro, template){ -->
-<!--   dendro <- dendro %>% -->
-<!--     match_order_by_labels(., template) %>% -->
-<!--     set('labels_cex', 0.6) %>% -->
-<!--     set("branches_lwd", 0.5) -->
-<!--   dendro <- as.ggdend(dendro) -->
-<!-- } -->
-<!-- dendrograms <- lapply(dendros, fix_dendrogram, dendros[[1]]) -->
-<!-- # par(mfrow=c(1,3)) -->
-<!-- lapply(dendrograms, ggplot, horiz=TRUE) -->
-<!-- ``` -->
-
-
-
-<!-- ```{r include=FALSE} -->
-<!-- # k80 -->
-<!-- x <- dendros[[2]] %>% set('labels_cex', 0.7) %>% set("branches_lwd", 1) -->
-<!-- # JC69 -->
-<!-- y <- dendros[[1]] %>% set('labels_cex', 0.7) %>% set("branches_lwd", 1) -->
-<!-- dend_diff(x,y)  -->
-<!-- ``` -->
-
-
-
-
-
-<!-- Maximum-likelihood tree construction with `Phangorn` -->
-<!-- ```{r message=FALSE, warning=FALSE} -->
-<!-- ## Tree construction with Phangorn -->
-<!-- # create base tree w JC model -->
-<!-- fit <- pml(polynoids.nj, polynoids.phy) -->
-<!-- fitJC <-  optim.pml( -->
-<!--   fit, optNni = TRUE, optBf = TRUE, optQ = TRUE,  -->
-<!--   control = pml.control(trace = 0)) -->
-<!-- fitJC <- optim.pml(fitJC, optNni=TRUE, -->
-<!--                    control = pml.control(trace=FALSE)) -->
-<!-- # create a tree JC+I+G model -->
-<!-- # optimize site variance + % invariant (+I+G params) -->
-<!-- fitJC_IG <- update(fitJC, k=4, inv=.2) -->
-<!-- fitJC_IG <- optim.pml(fitIG, optGamma=TRUE, optInv=TRUE, -->
-<!--                     control = pml.control(trace = 0)) -->
-<!-- # fit GTR+I+G tree + optimize model params -->
-<!-- fitGTR <- optim.pml( -->
-<!--   fitIG, model = 'GTR', optGamma=TRUE, optInv=TRUE, -->
-<!--   optNni=TRUE, optBf=TRUE, optQ=TRUE,optEdge = TRUE,  -->
-<!--   optRate = TRUE, control = pml.control(trace = 0))  -->
-<!-- # fit HKY+I+G tree + optimize model params -->
-<!-- fitHKY <- optim.pml( -->
-<!--   fitIG, model = 'HKY', optGamma=TRUE, optInv=TRUE, -->
-<!--   optNni=TRUE, optBf=TRUE, optQ=TRUE,optEdge = TRUE, -->
-<!--   optRate = TRUE, control = pml.control(trace = 0))  -->
-<!-- # check scores -->
-<!-- fitJC -->
-<!-- fitGTR -->
-<!-- fitHKY -->
-<!-- ``` -->
-
-
-```{r}
-# 
-# x <- anova(models[['F81']], models[['GTR']])
-# anova(models[['K80']], models[['GTR']])
-# anova(models[['K80+I']], models[['F81']])
-# anova(models[['GTR']], models[['GTR+G+I']])
-# anova(models[['HKY']], models[['HKY+G+I']])
-# anova(models[['HKY+G+I']], models[['GTR+G+I']])
-```
-
-
-
-<!-- #### Silhouette\ -->
-<!-- Calculate silhouette index to evaluate internal validity -->
-<!-- ```{r Silhouette Index, results = "hold"} -->
-<!-- # #Calculate Silhouette summary for gene1 -->
-<!-- # silhouette_gene1 <- silhouette (unlist(gene1_clusters[[1]]),dmatrix = gene1_matrix) -->
-<!-- # summary.silhouette_gene1<-summary(silhouette_gene1) -->
-<!-- # #Output silhouette summary -->
-<!-- # sprintf("Silhouette summary for %s",gene1) -->
-<!-- # summary.silhouette_gene1 -->
-<!-- ``` -->
-
-<!-- Plot Silhouette Analysis -->
-<!-- ```{r Silhouette Plot, results = "hold"} -->
-<!-- # #Plot silhouette scores for gene1 -->
-<!-- # fviz_silhouette(silhouette_gene1, label=FALSE,print.summary=TRUE,xlab="Cluster",main=sprintf("Silhouette Analysis for Clustering on %s Nucleotide Sequences", gene1),submain=sprintf("Clustering Method: %s; Model of DNA Evolution: %s",clustering.method,chosen.model),palette=c("#660000","purple","orange","blue")) -->
-<!-- ``` -->
+  
+  
+  
