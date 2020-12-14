@@ -1,2 +1,4 @@
-# 6210_project5_phylogeny
-Assignment 5 - Phylogenetic trees and molecular evolution
+# Maximum likelihood phylogeny and testing molecular models of evolution for Polynoidae cytochrome c oxidase subunit 1 sequences
+
+
+
