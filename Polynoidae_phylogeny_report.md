@@ -214,7 +214,7 @@ GC-content) and species distribution among genera were examined during
 data selection (*eg*. fig. 1). A multiple sequence alignment was
 performed and checked after sequence orientation.
 
-<img src="Polynoidae_phylogeny_report_files/figure-gfm/EDA-1.png" style="display: block; margin: auto;" />
+<img src="Polynoidae_phylogeny_report_files/figure-gfm/EDA-1.jpeg" style="display: block; margin: auto;" />
 **Figure 1**. Exploratory analysis of sequence length (l), GC
 composition (c), and species distribution among genera (r) in the
 polynoid *cytochrome c oxidase subunit 1* sequences dataset used in this
@@ -372,7 +372,7 @@ model_test_plot <- model_test %>%
 model_test_plot
 ```
 
-<img src="Polynoidae_phylogeny_report_files/figure-gfm/model test plot-1.png" style="display: block; margin: auto;" />
+<img src="Polynoidae_phylogeny_report_files/figure-gfm/model test plot-1.jpeg" style="display: block; margin: auto;" />
 **Figure 2**. Testing of all DNA substitution models (JC, F81, K80, HKY,
 TrN, TPM, K81, TIM, TVM, SYM, GTR) with and without added
 site-specificity (G, I) for the polynoid CO1 sequences, using
@@ -409,7 +409,7 @@ b <- models.pairwise.df %>%
 (a+b)
 ```
 
-<img src="Polynoidae_phylogeny_report_files/figure-gfm/unnamed-chunk-4-1.png" style="display: block; margin: auto;" />
+<img src="Polynoidae_phylogeny_report_files/figure-gfm/unnamed-chunk-4-1.jpeg" style="display: block; margin: auto;" />
 **Figure 3**. Heatamaps for the difference in AIC with small-samples
 correction (AICc) between each pair of models (left), and weighted
 Robinson-Foulds topological distance from pairwise comparisons all
@@ -427,14 +427,14 @@ HKY_dendrogram <- as.dendrogram(HKY_IG.phyl$tree) %>%
 ggplot(HKY_dendrogram, horiz = TRUE)
 ```
 
-![](Polynoidae_phylogeny_report_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
+![](Polynoidae_phylogeny_report_files/figure-gfm/unnamed-chunk-5-1.jpeg)<!-- -->
 
 **Figure 4.** Dendrogram of the maximum-likelihood phylogeny with the
 HKY+G+I model.
 
 ### 7. Supplemental
 
-<img src="Polynoidae_phylogeny_report_files/figure-gfm/supPlot1-1.png" style="display: block; margin: auto;" />
+<img src="Polynoidae_phylogeny_report_files/figure-gfm/supPlot1-1.jpeg" style="display: block; margin: auto;" />
 **Figure 5**. Saturation plots: p-distance underestimates real
 evolutionary distance as distance increases, while the Kimura
 2-parameter is more robust to the saturation of transitions (left). The
@@ -463,7 +463,7 @@ clusters.ML <- DECIPHER::IdClusters(
 
     ## ================================================================================
     ## 
-    ## Time difference of 0.02 secs
+    ## Time difference of 0.01 secs
 
 ``` r
 clusters.Dist <- DECIPHER::IdClusters(
@@ -494,7 +494,7 @@ dend.list <- dendlist(
   )
 ```
 
-![](Polynoidae_phylogeny_report_files/figure-gfm/tanglegram-1.png)<!-- -->
+![](Polynoidae_phylogeny_report_files/figure-gfm/tanglegram-1.jpeg)<!-- -->
 **Figure 6**. A tanglegram showing differences between a distance-based
 phylogeny using the Jukes-Cantor model and a ML phylogeny using the
 TN93+G model, selected based on the Bayesian information criteria (BIC).
