@@ -4,8 +4,7 @@ author: "Jason Moggridge 1159229"
 date: "10/12/2020"
 bibliography: polynoid_refs.bib
 output: 
-  pdf_document:
-    highlight: kate
+  github_document:
     toc: true
     toc_depth: 3
 urlcolor: blue
